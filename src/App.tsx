@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FEVER_DURATION,
   MAX_CUSTOM_BOARD_SIZE,
@@ -6,6 +6,7 @@ import {
   getBestScoreKey,
   keyOf,
 } from "./gameCore";
+import type { ShareActionResult } from "./game/share";
 import { createQrCodeDataUrl } from "./qrCode";
 import { useArrowGame } from "./useArrowGame";
 import { ChallengeShareModal } from "./ui/components/ChallengeShareModal";
@@ -24,6 +25,7 @@ import {
 import { ConfirmRestartModal, GameOverModal } from "./ui/sections";
 
 const QUICKSTART_STORAGE_KEY = "arrow-quickstart-dismissed";
+const SHARE_FEEDBACK_DURATION = 1800;
 
 function shouldShowQuickStart() {
   if (typeof window === "undefined") {
@@ -42,6 +44,10 @@ export default function App(): JSX.Element {
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
   const [quickStartOpen, setQuickStartOpen] = useState<boolean>(shouldShowQuickStart);
   const [confirmRestartOpen, setConfirmRestartOpen] = useState<boolean>(false);
+  const [drawerShareFeedback, setDrawerShareFeedback] = useState<ShareActionResult | null>(null);
+  const [modalShareFeedback, setModalShareFeedback] = useState<ShareActionResult | null>(null);
+  const drawerShareFeedbackTimeoutRef = useRef<number | null>(null);
+  const modalShareFeedbackTimeoutRef = useRef<number | null>(null);
 
   const mode = helpers.getModeConfig(state.modeKey);
   const difficulty = helpers.getDifficultyConfig(state.difficultyKey);
@@ -95,13 +101,78 @@ export default function App(): JSX.Element {
     }
   }, [challengeShareUrl, state.shareModalOpen]);
 
-  const openDrawer = useCallback((panelKey: string | null) => {
-    setActiveDrawer(panelKey);
+  const clearShareFeedback = useCallback((scope: "drawer" | "modal") => {
+    const timeoutRef = scope === "drawer" ? drawerShareFeedbackTimeoutRef : modalShareFeedbackTimeoutRef;
+    const setFeedback = scope === "drawer" ? setDrawerShareFeedback : setModalShareFeedback;
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    setFeedback(null);
   }, []);
 
-  const closeDrawer = useCallback(() => {
-    setActiveDrawer(null);
+  const flashShareFeedback = useCallback((scope: "drawer" | "modal", feedback: ShareActionResult | null) => {
+    if (!feedback?.message) {
+      return;
+    }
+
+    const timeoutRef = scope === "drawer" ? drawerShareFeedbackTimeoutRef : modalShareFeedbackTimeoutRef;
+    const setFeedback = scope === "drawer" ? setDrawerShareFeedback : setModalShareFeedback;
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+
+    setFeedback(feedback);
+    timeoutRef.current = window.setTimeout(() => {
+      timeoutRef.current = null;
+      setFeedback(null);
+    }, SHARE_FEEDBACK_DURATION);
   }, []);
+
+  const openDrawer = useCallback((panelKey: string | null) => {
+    if (panelKey !== "challenge") {
+      clearShareFeedback("drawer");
+    }
+    setActiveDrawer(panelKey);
+  }, [clearShareFeedback]);
+
+  const closeDrawer = useCallback(() => {
+    clearShareFeedback("drawer");
+    setActiveDrawer(null);
+  }, [clearShareFeedback]);
+
+  const openShareModal = useCallback(() => {
+    clearShareFeedback("modal");
+    actions.shareChallengeLink();
+  }, [actions.shareChallengeLink, clearShareFeedback]);
+
+  const closeShareModal = useCallback(() => {
+    clearShareFeedback("modal");
+    actions.closeShareModal();
+  }, [actions.closeShareModal, clearShareFeedback]);
+
+  const copyChallengeCodeFromDrawer = useCallback(async () => {
+    const result = await actions.copyChallengeCode();
+    flashShareFeedback("drawer", result);
+  }, [actions.copyChallengeCode, flashShareFeedback]);
+
+  const copyChallengeLinkFromDrawer = useCallback(async () => {
+    const result = await actions.copyChallengeLink();
+    flashShareFeedback("drawer", result);
+  }, [actions.copyChallengeLink, flashShareFeedback]);
+
+  const copyChallengeLinkFromModal = useCallback(async () => {
+    const result = await actions.copyChallengeLink();
+    flashShareFeedback("modal", result);
+  }, [actions.copyChallengeLink, flashShareFeedback]);
+
+  const shareChallengeFromModal = useCallback(async () => {
+    const result = await actions.shareChallengeViaSystem();
+    flashShareFeedback("modal", result);
+  }, [actions.shareChallengeViaSystem, flashShareFeedback]);
 
   const dismissQuickStart = useCallback((panelKey: string | null = null) => {
     setQuickStartOpen(false);
@@ -136,6 +207,18 @@ export default function App(): JSX.Element {
     };
   }, [activeDrawer, closeDrawer]);
 
+  useEffect(() => {
+    return () => {
+      if (drawerShareFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(drawerShareFeedbackTimeoutRef.current);
+      }
+
+      if (modalShareFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(modalShareFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
   let drawerContent: React.ReactNode = null;
   if (activeDrawer === "settings") {
     drawerContent = (
@@ -154,10 +237,16 @@ export default function App(): JSX.Element {
     drawerContent = (
       <ChallengeDrawerSection
         key="challenge-panel"
-        actions={actions}
+        actions={{
+          ...actions,
+          copyChallengeCode: copyChallengeCodeFromDrawer,
+          copyChallengeLink: copyChallengeLinkFromDrawer,
+          shareChallengeLink: openShareModal,
+        }}
         canApplySeedInput={canApplySeedInput}
         endlessMode={endlessMode}
         seedModeLabel={seedModeLabel}
+        shareFeedback={drawerShareFeedback}
         state={state}
       />
     );
@@ -176,7 +265,9 @@ export default function App(): JSX.Element {
 
   const actionsForUI = {
     ...actions,
+    closeShareModal,
     requestRestart: () => setConfirmRestartOpen(true),
+    shareChallengeLink: openShareModal,
   };
 
   return (
@@ -242,9 +333,10 @@ export default function App(): JSX.Element {
             ? `挑战码：${state.activeSeedCode}。朋友扫码后会直接打开同一盘。`
             : `当前得分：${formatNumber(state.score)}。可以扫码打开，或直接复制链接发给朋友。`
         }
-        onClose={actions.closeShareModal}
-        onCopyLink={actions.copyChallengeLink}
-        onSystemShare={actions.shareChallengeViaSystem}
+        onClose={closeShareModal}
+        onCopyLink={copyChallengeLinkFromModal}
+        onSystemShare={shareChallengeFromModal}
+        shareFeedback={modalShareFeedback}
       />
 
       <ConfirmRestartModal
@@ -273,9 +365,7 @@ export default function App(): JSX.Element {
           if (typeof actions.closeGameOver === "function") {
             actions.closeGameOver();
           }
-          if (typeof actions.shareChallengeLink === "function") {
-            actions.shareChallengeLink();
-          }
+          openShareModal();
         }}
         onClose={() => {
           if (typeof actions.closeGameOver === "function") {

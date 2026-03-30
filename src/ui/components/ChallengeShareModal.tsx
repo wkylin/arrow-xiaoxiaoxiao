@@ -1,4 +1,5 @@
 import React from "react";
+import type { ShareActionResult } from "../../game/share";
 
 export interface ChallengeShareModalProps {
   open: boolean;
@@ -9,10 +10,15 @@ export interface ChallengeShareModalProps {
   onClose?: () => void;
   onCopyLink?: () => void;
   onSystemShare?: () => void;
+  shareFeedback?: ShareActionResult | null;
 }
 
-export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle, onClose, onCopyLink, onSystemShare }: ChallengeShareModalProps) {
+export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle, onClose, onCopyLink, onSystemShare, shareFeedback }: ChallengeShareModalProps) {
   if (!open) return null;
+
+  const linkCopied = shareFeedback?.action === "challengeLink" && shareFeedback?.tone === "success";
+  const feedbackClass = shareFeedback ? `share-feedback is-${shareFeedback.tone}` : "share-feedback is-hint";
+  const feedbackText = shareFeedback?.message ?? "复制链接适合发消息，扫码更适合当面一起玩。";
 
   return (
     <div className="share-modal-backdrop" role="presentation" onClick={onClose}>
@@ -39,10 +45,14 @@ export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle
         </div>
 
         <div className="share-modal-actions">
-          <button className="secondary-btn share-modal-btn" type="button" onClick={onCopyLink}>复制链接</button>
+          <button className={`secondary-btn share-modal-btn${linkCopied ? " is-copied" : ""}`} type="button" onClick={onCopyLink}>
+            {linkCopied ? "已复制 ✓" : "复制链接"}
+          </button>
           <button className="secondary-btn share-modal-btn" type="button" onClick={onSystemShare}>系统分享</button>
           <button className="primary-btn share-modal-btn" type="button" onClick={onClose}>我知道了</button>
         </div>
+
+        <p className={feedbackClass} role="status" aria-live="polite">{feedbackText}</p>
       </section>
     </div>
   );

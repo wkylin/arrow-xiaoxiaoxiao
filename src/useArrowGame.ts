@@ -356,21 +356,21 @@ export function useArrowGame() {
   }, [commitSetupInstruction]);
 
   const copyChallengeCode = useCallback(async () => {
-    await copyChallengeCodeAction({
+    return copyChallengeCodeAction({
       currentState: gameRef.current,
       updateChallengeStatus,
     });
   }, [updateChallengeStatus]);
 
   const copyChallengeLink = useCallback(async () => {
-    await copyChallengeLinkAction({
+    return copyChallengeLinkAction({
       currentState: gameRef.current,
       updateChallengeStatus,
     });
   }, [updateChallengeStatus]);
 
   const shareChallengeViaSystem = useCallback(async () => {
-    await shareChallengeViaSystemAction({
+    return shareChallengeViaSystemAction({
       currentState: gameRef.current,
       updateChallengeStatus,
     });

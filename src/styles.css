@@ -399,6 +399,31 @@ h3 {
   flex-basis: calc(50% - 8px);
 }
 
+.share-btn.is-copied,
+.share-modal-btn.is-copied {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.share-feedback {
+  margin: 10px 2px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.share-feedback.is-hint {
+  color: var(--muted);
+}
+
+.share-feedback.is-success {
+  color: #9df2cb;
+}
+
+.share-feedback.is-error {
+  color: #ffc0c0;
+}
+
 .seed-note {
   margin-top: 10px;
   color: var(--muted);

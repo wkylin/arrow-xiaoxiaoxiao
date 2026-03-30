@@ -311,7 +311,7 @@ export function SettingsDrawerSection({ actions, bestScore, boardLabel, difficul
   );
 }
 
-export function ChallengeDrawerSection({ actions, canApplySeedInput, endlessMode, seedModeLabel, state }: any) {
+export function ChallengeDrawerSection({ actions, canApplySeedInput, endlessMode, seedModeLabel, shareFeedback, state }: any) {
   if (!endlessMode) {
     return (
       <section className="seed-panel">
@@ -325,6 +325,12 @@ export function ChallengeDrawerSection({ actions, canApplySeedInput, endlessMode
       </section>
     );
   }
+
+  const challengeCodeCopied = shareFeedback?.action === "challengeCode" && shareFeedback?.tone === "success";
+  const challengeLinkCopied = shareFeedback?.action === "challengeLink" && shareFeedback?.tone === "success";
+  const shareFeedbackActive = shareFeedback?.action === "challengeCode" || shareFeedback?.action === "challengeLink";
+  const shareFeedbackClass = shareFeedbackActive ? `share-feedback is-${shareFeedback.tone}` : "share-feedback is-hint";
+  const shareFeedbackText = shareFeedbackActive ? shareFeedback.message : "链接适合直接发，挑战码适合当面约战。";
 
   return (
     <div className="drawer-stack">
@@ -375,10 +381,16 @@ export function ChallengeDrawerSection({ actions, canApplySeedInput, endlessMode
         </div>
 
         <div className="seed-actions share-actions">
-          <button className="secondary-btn seed-btn share-btn" type="button" onClick={actions.copyChallengeCode}>复制挑战码</button>
-          <button className="secondary-btn seed-btn share-btn" type="button" onClick={actions.copyChallengeLink}>复制链接</button>
+          <button className={`secondary-btn seed-btn share-btn${challengeCodeCopied ? " is-copied" : ""}`} type="button" onClick={actions.copyChallengeCode}>
+            {challengeCodeCopied ? "已复制 ✓" : "复制挑战码"}
+          </button>
+          <button className={`secondary-btn seed-btn share-btn${challengeLinkCopied ? " is-copied" : ""}`} type="button" onClick={actions.copyChallengeLink}>
+            {challengeLinkCopied ? "已复制 ✓" : "复制链接"}
+          </button>
           <button className="secondary-btn seed-btn share-btn" type="button" onClick={actions.shareChallengeLink}>二维码分享</button>
         </div>
+
+        <p className={shareFeedbackClass} role="status" aria-live="polite">{shareFeedbackText}</p>
       </section>
     </div>
   );

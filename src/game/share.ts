@@ -1,6 +1,13 @@
 import { getDifficultyConfig, getModeConfig, getNormalizedBoardSize } from "../gameCore";
 import { buildChallengeShareUrl, copyText } from "./session";
 
+export interface ShareActionResult {
+  action: "challengeCode" | "challengeLink" | "systemShare";
+  ok: boolean;
+  tone: "success" | "error";
+  message: string;
+}
+
 export function buildStateChallengeShareUrl(currentState) {
   return buildChallengeShareUrl({
     modeKey: currentState.modeKey,
@@ -49,43 +56,88 @@ export function buildSharePayload(currentState) {
 export async function copyChallengeCodeAction({ currentState, updateChallengeStatus }) {
   const challengeCode = currentState.activeSeedCode;
   if (!challengeCode) {
-    return;
+    const message = "这局的挑战码还没准备好，稍后再试。";
+    updateChallengeStatus(message);
+    return {
+      action: "challengeCode",
+      ok: false,
+      tone: "error",
+      message,
+    } satisfies ShareActionResult;
   }
 
   try {
     const copied = await copyText(challengeCode);
-    updateChallengeStatus(copied ? `挑战码已复制：${challengeCode}` : "当前环境不支持自动复制，请手动抄下挑战码。");
+    const message = copied ? "挑战码已复制，发给好友就能一起挑战这盘。" : "这次没复制成功，先手动记下挑战码也能发给好友。";
+    updateChallengeStatus(message);
+    return {
+      action: "challengeCode",
+      ok: copied,
+      tone: copied ? "success" : "error",
+      message,
+    } satisfies ShareActionResult;
   } catch {
-    updateChallengeStatus("复制挑战码失败了，请稍后再试或手动复制。");
+    const message = "这次没复制成功，稍后再试，或先手动复制挑战码。";
+    updateChallengeStatus(message);
+    return {
+      action: "challengeCode",
+      ok: false,
+      tone: "error",
+      message,
+    } satisfies ShareActionResult;
   }
 }
 
 export async function copyChallengeLinkAction({ currentState, updateChallengeStatus }) {
   const sharePayload = buildSharePayload(currentState);
   if (!sharePayload) {
-    updateChallengeStatus("当前链接生成失败了，请稍后再试。");
-    return;
+    const message = "这次没生成出分享链接，稍后再试。";
+    updateChallengeStatus(message);
+    return {
+      action: "challengeLink",
+      ok: false,
+      tone: "error",
+      message,
+    } satisfies ShareActionResult;
   }
 
   try {
     const copied = await copyText(sharePayload.shareUrl);
-    updateChallengeStatus(
-      copied
-        ? currentState.modeKey === "endless"
-          ? "分享链接已复制，发给朋友就能打开同一盘。"
-          : "页面链接已复制，发给朋友就能直接开玩。"
-        : "当前环境不支持自动复制，请手动复制地址栏。",
-    );
+    const message = copied
+      ? currentState.modeKey === "endless"
+        ? "链接已复制，发给好友点开就是同一盘。"
+        : "链接已复制，发给好友点开就能直接开玩。"
+      : "这次没复制成功，稍后再试，或先手动复制链接。";
+    updateChallengeStatus(message);
+    return {
+      action: "challengeLink",
+      ok: copied,
+      tone: copied ? "success" : "error",
+      message,
+    } satisfies ShareActionResult;
   } catch {
-    updateChallengeStatus("复制分享链接失败了，请稍后再试。");
+    const message = "这次没复制成功，稍后再试，或先手动复制链接。";
+    updateChallengeStatus(message);
+    return {
+      action: "challengeLink",
+      ok: false,
+      tone: "error",
+      message,
+    } satisfies ShareActionResult;
   }
 }
 
 export async function shareChallengeViaSystemAction({ currentState, updateChallengeStatus }) {
   const sharePayload = buildSharePayload(currentState);
   if (!sharePayload) {
-    updateChallengeStatus("当前链接生成失败了，请稍后再试。");
-    return;
+    const message = "这次没生成出分享链接，稍后再试。";
+    updateChallengeStatus(message);
+    return {
+      action: "systemShare",
+      ok: false,
+      tone: "error",
+      message,
+    } satisfies ShareActionResult;
   }
 
   try {
@@ -95,22 +147,49 @@ export async function shareChallengeViaSystemAction({ currentState, updateChalle
         text: sharePayload.shareText,
         url: sharePayload.shareUrl,
       });
-      updateChallengeStatus(currentState.modeKey === "endless" ? "分享面板已打开，把这盘挑战发给朋友吧。" : "分享面板已打开，把游戏发给朋友吧。");
-      return;
+      const message = currentState.modeKey === "endless" ? "分享面板已打开，挑个方式把这盘发给好友吧。" : "分享面板已打开，挑个方式把游戏发给好友吧。";
+      updateChallengeStatus(message);
+      return {
+        action: "systemShare",
+        ok: true,
+        tone: "success",
+        message,
+      } satisfies ShareActionResult;
     }
 
     const copied = await copyText(sharePayload.shareUrl);
-    updateChallengeStatus(copied ? "当前环境不支持系统分享，已自动复制链接。" : "当前环境不支持系统分享，也没能复制链接，请手动复制地址栏。");
+    const message = copied ? "系统分享暂时不可用，已帮你复制链接，直接发给好友即可。" : "系统分享暂时不可用，请手动复制链接发给好友。";
+    updateChallengeStatus(message);
+    return {
+      action: "systemShare",
+      ok: copied,
+      tone: copied ? "success" : "error",
+      message,
+    } satisfies ShareActionResult;
   } catch (error) {
     if (error?.name === "AbortError") {
-      return;
+      return null;
     }
 
     try {
       const copied = await copyText(sharePayload.shareUrl);
-      updateChallengeStatus(copied ? "系统分享不可用，已自动复制分享链接。" : "分享失败了，请手动复制地址栏链接。");
+      const message = copied ? "系统分享暂时不可用，已帮你复制链接，直接发给好友即可。" : "这次没分享出去，请手动复制链接发给好友。";
+      updateChallengeStatus(message);
+      return {
+        action: "systemShare",
+        ok: copied,
+        tone: copied ? "success" : "error",
+        message,
+      } satisfies ShareActionResult;
     } catch {
-      updateChallengeStatus("分享失败了，请手动复制地址栏链接。");
+      const message = "这次没分享出去，请手动复制链接发给好友。";
+      updateChallengeStatus(message);
+      return {
+        action: "systemShare",
+        ok: false,
+        tone: "error",
+        message,
+      } satisfies ShareActionResult;
     }
   }
 }
