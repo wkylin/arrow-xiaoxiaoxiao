@@ -4,13 +4,13 @@
 
 ## 版权与使用说明
 
-这个仓库当前是公开可见，但它不是一个可自由复用的开源项目。
+这个源码仓默认不对外授权，也不是一个可自由复用的开源项目。
 
 - 仓库代码、玩法设计、视觉表现和文案默认保留全部权利。
 - 未经书面许可，不允许复制、修改、二次发布、商用或部署衍生版本。
 - 具体约束见根目录 [LICENSE](./LICENSE)。
 
-如果你的目标是“页面公开可访问，但源码尽量别暴露”，可以按 [docs/private-source-pages-plan.md](./docs/private-source-pages-plan.md) 把项目拆成“私有源码仓 + 公共发布仓”。
+当前推荐结构已经是“私有源码仓 + 公共发布仓”，详细说明见 [docs/private-source-pages-plan.md](./docs/private-source-pages-plan.md)。
 
 ## 技术栈
 
@@ -110,8 +110,12 @@ pnpm preview
 
 仓库已包含 `.github/workflows/deploy-pages.yml` 工作流。
 
-- 推送到 `main` 分支后会自动构建并发布 `dist/` 到 GitHub Pages。
-- 仓库的 Pages Source 需要在 GitHub 仓库设置里切到 `Deploy from a branch`，并选择 `gh-pages` 分支的 `/ (root)`。
+- 源码仓：`wkylin/arrow-xiaoxiaoxiao-src`
+- 站点仓：`wkylin/arrow-xiaoxiaoxiao-site`
+- 推送到源码仓 `main` 分支后，会自动构建并把 `dist/` 发布到站点仓的 `gh-pages` 分支。
+- 源码仓需要配置一个仓库 Secret：`PUBLIC_SITE_PAT`
+- 这个 Token 需要对 `wkylin/arrow-xiaoxiaoxiao-site` 拥有写权限。
+- 站点仓的 Pages Source 需要切到 `Deploy from a branch`，并选择 `gh-pages` 分支的 `/ (root)`。
 - `vite.config.ts` 已改为相对 `base`，适合直接挂在 GitHub Pages 项目路径下。
 
 ## 源码保护建议
