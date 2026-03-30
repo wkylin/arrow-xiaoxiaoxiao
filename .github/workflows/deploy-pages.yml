@@ -34,6 +34,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify deploy token
+        run: |
+          if [ -z "${{ secrets.PUBLIC_SITE_PAT }}" ]; then
+            echo "::error::Missing PUBLIC_SITE_PAT secret in wkylin/arrow-xiaoxiaoxiao-src"
+            exit 1
+          fi
+
       - name: Publish dist to public site repo
         uses: peaceiris/actions-gh-pages@v4
         with:
