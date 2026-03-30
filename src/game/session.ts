@@ -15,6 +15,7 @@ import {
 export const IDLE_STATUS = "点击格子直接消除，鼠标悬停或手指按下可预览路径。";
 export const RESET_STATUS = "新的一局开始了，优先寻找长链和闭环。闯关模式记得顺手收集星钻。";
 export const ENDLESS_RESET_STATUS = "无尽模式开始了，先跟着发光起点找长链。";
+const QUICKSTART_STORAGE_KEY = "arrow-quickstart-dismissed";
 
 export function getStorageItem(key, fallback) {
   if (typeof window === "undefined") {
@@ -199,12 +200,13 @@ export async function copyText(text) {
 export function createBootstrapState() {
   const storedModeKey = getStorageItem("arrow-last-mode", "classic");
   let modeKey = MODES[storedModeKey] ? storedModeKey : "classic";
-  const storedDifficultyKey = getStorageItem("arrow-last-difficulty", "normal");
-  let difficultyKey = DIFFICULTIES[storedDifficultyKey] ? storedDifficultyKey : "normal";
+  const storedDifficultyKey = getStorageItem("arrow-last-difficulty", "beginner");
+  let difficultyKey = DIFFICULTIES[storedDifficultyKey] ? storedDifficultyKey : "beginner";
   let customBoardSize = getNormalizedBoardSize(getStorageItem("arrow-custom-board-size", String(DEFAULT_CUSTOM_BOARD_SIZE)));
   let seedInput = getStorageItem("arrow-endless-seed-input", "");
   let seedMode = normalizeSeedMode(getStorageItem("arrow-endless-seed-mode", "random"));
   const sharedChallengeState = getSharedChallengeState();
+  const quickStartDismissed = getStorageItem(QUICKSTART_STORAGE_KEY, "0") === "1";
 
   if (sharedChallengeState) {
     modeKey = sharedChallengeState.modeKey;
@@ -217,6 +219,12 @@ export function createBootstrapState() {
     setStorageItem("arrow-custom-board-size", String(customBoardSize));
     setStorageItem("arrow-endless-seed-input", seedInput);
     setStorageItem("arrow-endless-seed-mode", seedMode);
+  } else if (!quickStartDismissed) {
+    modeKey = "classic";
+    difficultyKey = "beginner";
+    customBoardSize = DEFAULT_CUSTOM_BOARD_SIZE;
+    seedInput = "";
+    seedMode = "random";
   }
 
   const { activeSeedCode, dailyChallengeCode } = resolveSeedSession(modeKey, seedMode, seedInput);

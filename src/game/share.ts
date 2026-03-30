@@ -1,4 +1,4 @@
-import { getDifficultyConfig, getNormalizedBoardSize } from "../gameCore";
+import { getDifficultyConfig, getModeConfig, getNormalizedBoardSize } from "../gameCore";
 import { buildChallengeShareUrl, copyText } from "./session";
 
 export function buildStateChallengeShareUrl(currentState) {
@@ -26,6 +26,26 @@ export function buildChallengeSharePayload(currentState) {
   };
 }
 
+export function buildDefaultSharePayload(currentState) {
+  const shareUrl = buildStateChallengeShareUrl(currentState);
+  if (!shareUrl) {
+    return null;
+  }
+
+  const difficulty = getDifficultyConfig(currentState.difficultyKey);
+  const mode = getModeConfig(currentState.modeKey);
+  const boardSize = currentState.modeKey === "endless" ? getNormalizedBoardSize(currentState.customBoardSize) : difficulty.boardSize;
+
+  return {
+    shareUrl,
+    shareText: `我在玩「${mode.name} · ${difficulty.label} · ${boardSize}×${boardSize}」，当前打了 ${currentState.score.toLocaleString("zh-CN")} 分，来试试《箭阵消消消》：`,
+  };
+}
+
+export function buildSharePayload(currentState) {
+  return currentState.modeKey === "endless" ? buildChallengeSharePayload(currentState) : buildDefaultSharePayload(currentState);
+}
+
 export async function copyChallengeCodeAction({ currentState, updateChallengeStatus }) {
   const challengeCode = currentState.activeSeedCode;
   if (!challengeCode) {
@@ -41,7 +61,7 @@ export async function copyChallengeCodeAction({ currentState, updateChallengeSta
 }
 
 export async function copyChallengeLinkAction({ currentState, updateChallengeStatus }) {
-  const sharePayload = buildChallengeSharePayload(currentState);
+  const sharePayload = buildSharePayload(currentState);
   if (!sharePayload) {
     updateChallengeStatus("当前链接生成失败了，请稍后再试。");
     return;
@@ -49,14 +69,20 @@ export async function copyChallengeLinkAction({ currentState, updateChallengeSta
 
   try {
     const copied = await copyText(sharePayload.shareUrl);
-    updateChallengeStatus(copied ? "分享链接已复制，发给朋友就能打开同一盘。" : "当前环境不支持自动复制，请手动复制地址栏。");
+    updateChallengeStatus(
+      copied
+        ? currentState.modeKey === "endless"
+          ? "分享链接已复制，发给朋友就能打开同一盘。"
+          : "页面链接已复制，发给朋友就能直接开玩。"
+        : "当前环境不支持自动复制，请手动复制地址栏。",
+    );
   } catch {
     updateChallengeStatus("复制分享链接失败了，请稍后再试。");
   }
 }
 
 export async function shareChallengeViaSystemAction({ currentState, updateChallengeStatus }) {
-  const sharePayload = buildChallengeSharePayload(currentState);
+  const sharePayload = buildSharePayload(currentState);
   if (!sharePayload) {
     updateChallengeStatus("当前链接生成失败了，请稍后再试。");
     return;
@@ -65,16 +91,16 @@ export async function shareChallengeViaSystemAction({ currentState, updateChalle
   try {
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       await navigator.share({
-        title: "箭阵消消消挑战",
+        title: currentState.modeKey === "endless" ? "箭阵消消消挑战" : "箭阵消消消",
         text: sharePayload.shareText,
         url: sharePayload.shareUrl,
       });
-      updateChallengeStatus("分享面板已打开，把这盘挑战发给朋友吧。");
+      updateChallengeStatus(currentState.modeKey === "endless" ? "分享面板已打开，把这盘挑战发给朋友吧。" : "分享面板已打开，把游戏发给朋友吧。");
       return;
     }
 
     const copied = await copyText(sharePayload.shareUrl);
-    updateChallengeStatus(copied ? "当前环境不支持系统分享，已自动复制分享链接。" : "当前环境不支持系统分享，也没能复制链接，请手动复制地址栏。");
+    updateChallengeStatus(copied ? "当前环境不支持系统分享，已自动复制链接。" : "当前环境不支持系统分享，也没能复制链接，请手动复制地址栏。");
   } catch (error) {
     if (error?.name === "AbortError") {
       return;

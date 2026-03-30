@@ -1,7 +1,7 @@
 export const BOARD_SIZE = 7;
 export const MIN_CUSTOM_BOARD_SIZE = 4;
 export const MAX_CUSTOM_BOARD_SIZE = 12;
-export const DEFAULT_CUSTOM_BOARD_SIZE = 7;
+export const DEFAULT_CUSTOM_BOARD_SIZE = 4;
 export const BASE_MIN_CLEAR = 3;
 export const FEVER_MIN_CLEAR = 2;
 export const FEVER_DURATION = 9000;
@@ -347,6 +347,36 @@ export function buildRandomBoard({ modeKey, level, difficultyKey = "normal", boa
   };
 }
 
+export function repairBoard({
+  board,
+  modeKey,
+  level,
+  difficultyKey = "normal",
+  boardSizeOverride = null,
+  nextId,
+  random = Math.random,
+}) {
+  const boardSize = getBoardSize(difficultyKey, boardSizeOverride);
+  let workingNextId = nextId;
+  const repairedBoard = Array.from({ length: boardSize }, (_, row) =>
+    Array.from({ length: boardSize }, (_, col) => {
+      const currentCell = board[row]?.[col];
+      if (currentCell) {
+        return { ...currentCell };
+      }
+
+      const result = createRandomCell({ modeKey, level, difficultyKey, nextId: workingNextId, random });
+      workingNextId = result.nextId;
+      return result.cell;
+    }),
+  );
+
+  return {
+    board: repairedBoard,
+    nextId: workingNextId,
+  };
+}
+
 function countSpecial(board, special) {
   return board.flat().filter((cell) => cell && cell.special === special).length;
 }
@@ -484,8 +514,17 @@ export function ensurePlayableBoard({
   nextId,
   random = Math.random,
 }) {
-  let workingBoard = cloneBoard(board);
-  let workingNextId = nextId;
+  const repaired = repairBoard({
+    board,
+    modeKey,
+    level,
+    difficultyKey,
+    boardSizeOverride,
+    nextId,
+    random,
+  });
+  let workingBoard = repaired.board;
+  let workingNextId = repaired.nextId;
   let attempts = 0;
   const minimumValidStarts = getMinimumValidStarts(difficultyKey, boardSizeOverride);
   const requiredLength = getDifficultyConfig(difficultyKey).baseClearLength;

@@ -4,15 +4,18 @@ import { cx } from "./helpers";
 import { BoardCell } from "./components/BoardCell";
 import { DifficultyButton, GuideStep, MeterBlock, ModeButton, SizeButton, TipCard } from "./components/basic";
 
-export function MinimalHeaderSection({ actions, boardLabel, difficulty, mode, onOpenMenu, state }) {
+export function MinimalHeaderSection({ actions, boardLabel, difficulty, mode, onOpenGuide, onOpenMenu, state }) {
   return (
     <header className="minimal-header">
       <div className="header-main">
         <div className="header-copy">
-          <span className="eyebrow">立即开玩</span>
-          <h1 className="minimal-title">箭阵消消消</h1>
+          <h1 className="minimal-title">箭阵！消消消</h1>
+          <p className="header-slogan">一笔成链，越绕越爽</p>
         </div>
         <div className="header-actions">
+          <button className="icon-btn subtle-help-btn" type="button" onClick={onOpenGuide} aria-label="查看玩法说明">
+            ?
+          </button>
           <button
             id="sound-btn"
             className={cx("icon-btn", state.soundEnabled && "active")}
@@ -22,7 +25,7 @@ export function MinimalHeaderSection({ actions, boardLabel, difficulty, mode, on
           >
             {state.soundEnabled ? "🔊" : "🔈"}
           </button>
-          <button className="icon-btn" type="button" onClick={onOpenMenu} aria-label="打开更多设置">
+          <button className="icon-btn" type="button" onClick={onOpenMenu} aria-label="打开玩法与设置">
             ☰
           </button>
         </div>
@@ -61,8 +64,6 @@ export function MissionControlSection({ feverText, feverWidth, levelValue, missi
 
       <MeterBlock label="进度" value={progressText} fillClassName="stage-fill" width={state.targetScore ? (state.stageScore / state.targetScore) * 100 : 0} />
       <MeterBlock label="狂热" value={feverText} fillClassName="fever-fill" width={feverWidth} />
-
-      <p id="status-text" className="status-text compact-status" aria-live="polite">{state.statusText}</p>
     </section>
   );
 }
@@ -82,6 +83,7 @@ export function CompactRulesSection({ onOpenGuide, requiredLength }: { onOpenGui
 
 export function BattleBoardSection({
   actions,
+  board,
   boardLabel,
   boardStyle,
   clearingKeys,
@@ -95,22 +97,32 @@ export function BattleBoardSection({
   refs,
   state,
 }: any) {
+  const boardStatusLabel =
+    state.isLocked
+      ? "结算中"
+      : feverActive
+        ? "狂热中"
+        : state.previewChain.length
+          ? state.previewValid
+            ? "可消除"
+            : "预览"
+          : "战况";
+
   return (
     <section className="board-panel board-panel-minimal">
       <div className="board-head minimal-board-head">
         <div>
-          <h2 id="board-title">{mode.name} · {difficulty.label} · {boardLabel}</h2>
-          <p id="board-subtitle">轻点一个格子，系统会自动沿箭头走；走出边界或形成闭环后再判断能不能消。</p>
+          <h2 id="board-title">当前棋盘</h2>
         </div>
-        <span id="fever-badge" className={cx("fever-badge", !feverActive && "hidden")}>狂热</span>
+        <span id="fever-badge" className={cx("fever-badge", feverActive && "active")} aria-hidden={!feverActive}>狂热</span>
       </div>
 
       <div ref={refs.boardFrameRef} className={cx("board-frame", feverActive && "is-fever")} style={boardStyle}>
         <div ref={refs.boardRef} className="board" style={boardStyle} onMouseLeave={actions.handleBoardLeave}>
-          {state.board.flatMap((row: any[], rowIndex: number) =>
+          {board.flatMap((row: any[], rowIndex: number) =>
             row.map((cell: any, colIndex: number) => (
               <BoardCell
-                key={cell.id}
+                key={cell?.id ?? `empty-${rowIndex}-${colIndex}`}
                 cell={cell}
                 rowIndex={rowIndex}
                 colIndex={colIndex}
@@ -129,7 +141,12 @@ export function BattleBoardSection({
         <div ref={refs.particleLayerRef} className="particle-layer" aria-hidden="true" />
       </div>
 
-      <p className="board-footnote">{endlessMode ? "无尽模式没有失败限制，专注找更长的链和闭环。" : "白框 + 数字就是自动路径；半透明表示这条链还不够长。"}</p>
+      <section className="board-status-shell" aria-live="polite">
+        <span className={cx("board-status-badge", feverActive && "fever", state.previewChain.length && state.previewValid && "success", state.previewChain.length && !state.previewValid && "preview")}>
+          {boardStatusLabel}
+        </span>
+        <p id="status-text" className="board-status-text">{state.statusText}</p>
+      </section>
     </section>
   );
 }
@@ -185,14 +202,14 @@ export function BottomDrawerShellSection({ activePanel, children, onClose, onSel
           <div className="drawer-handle" />
           <div className="drawer-head">
             <div>
-              <h2>更多功能</h2>
-              <p className="drawer-desc">说明和配置都放在这里，主界面只保留当前局最重要的内容。</p>
+              <h2>玩法与设置</h2>
+              <p className="drawer-desc">想看规则、换难度、开挑战，都在这里。</p>
             </div>
             <button className="icon-btn" type="button" onClick={onClose} aria-label="关闭抽屉">✕</button>
           </div>
 
           <div className="drawer-tabs">
-            <button className={cx("drawer-tab", activePanel === "guide" && "active")} type="button" onClick={() => onSelectPanel("guide")}>怎么玩</button>
+            <button className={cx("drawer-tab", activePanel === "guide" && "active")} type="button" onClick={() => onSelectPanel("guide")}>玩法</button>
             <button className={cx("drawer-tab", activePanel === "settings" && "active")} type="button" onClick={() => onSelectPanel("settings")}>设置</button>
             <button className={cx("drawer-tab", activePanel === "challenge" && "active")} type="button" onClick={() => onSelectPanel("challenge")}>挑战</button>
           </div>

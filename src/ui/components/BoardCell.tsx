@@ -29,6 +29,10 @@ export function BoardCell({
   onPreview,
   onClick,
 }: BoardCellProps) {
+  if (!cell) {
+    return <div className="cell cell-empty" aria-hidden="true" data-row={String(rowIndex)} data-col={String(colIndex)} />;
+  }
+
   const direction = DIRECTIONS[cell.dir];
   const special = cell.special ? SPECIAL_META[cell.special] : null;
   const cellKey = keyOf(rowIndex, colIndex);

@@ -14,7 +14,6 @@ import {
   BattleBoardSection,
   BottomDrawerShellSection,
   ChallengeDrawerSection,
-  CompactRulesSection,
   GuideDrawerSection,
   MissionControlSection,
   MinimalHeaderSection,
@@ -39,7 +38,7 @@ function shouldShowQuickStart() {
 }
 
 export default function App(): JSX.Element {
-  const { state, refs, actions, helpers } = useArrowGame();
+  const { state, renderBoard, refs, actions, helpers } = useArrowGame();
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
   const [quickStartOpen, setQuickStartOpen] = useState<boolean>(shouldShowQuickStart);
   const [confirmRestartOpen, setConfirmRestartOpen] = useState<boolean>(false);
@@ -47,7 +46,7 @@ export default function App(): JSX.Element {
   const mode = helpers.getModeConfig(state.modeKey);
   const difficulty = helpers.getDifficultyConfig(state.difficultyKey);
   const endlessMode = state.modeKey === "endless";
-  const boardSize = state.board.length || (endlessMode ? state.customBoardSize : difficulty.boardSize);
+  const boardSize = renderBoard.length || (endlessMode ? state.customBoardSize : difficulty.boardSize);
   const boardLabel = `${boardSize}×${boardSize}`;
   const boardStyle = useMemo(() => getBoardMetrics(boardSize), [boardSize]);
   const sizeOptions = useMemo(
@@ -68,10 +67,10 @@ export default function App(): JSX.Element {
   const resourceValue = state.modeKey === "classic" ? formatSeconds(state.timeLeft) : state.modeKey === "rush" ? `${state.movesLeft}` : "无尽";
   const missionText =
     state.modeKey === "classic"
-      ? `本关打到 ${formatNumber(state.targetScore)} 分即可升关`
+      ? `目标分 ${formatNumber(state.targetScore)}`
       : state.modeKey === "rush"
-      ? `收集星钻 ${state.missionCollected}/${state.missionGoal}，并冲到目标分`
-      : `打到 ${formatNumber(state.targetScore)} 分进入下一段`;
+      ? `星钻 ${state.missionCollected}/${state.missionGoal} · 目标分 ${formatNumber(state.targetScore)}`
+      : `里程碑 ${formatNumber(state.targetScore)} 分`;
   const bestScoreKey = getBestScoreKey(state.modeKey, state.difficultyKey, endlessMode ? state.customBoardSize : null);
   const bestScore = state.bestScores[bestScoreKey] ?? 0;
   const disabled = state.isLocked || state.isGameOver;
@@ -184,7 +183,16 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app-shell focus-minimal-app">
-      <MinimalHeaderSection key="header" actions={actionsForUI} boardLabel={boardLabel} difficulty={difficulty} mode={mode} onOpenMenu={() => openDrawer("settings")} state={state} />
+      <MinimalHeaderSection
+        key="header"
+        actions={actionsForUI}
+        boardLabel={boardLabel}
+        difficulty={difficulty}
+        mode={mode}
+        onOpenGuide={() => openDrawer("guide")}
+        onOpenMenu={() => openDrawer("settings")}
+        state={state}
+      />
 
       <MissionControlSection
         key="mission"
@@ -199,12 +207,11 @@ export default function App(): JSX.Element {
         state={state}
       />
 
-      <CompactRulesSection key="rules" onOpenGuide={() => openDrawer("guide")} requiredLength={requiredLength} />
-
       <BattleBoardSection
         key="board"
         actions={actionsForUI}
         boardLabel={boardLabel}
+        board={renderBoard}
         boardStyle={boardStyle}
         clearingKeys={clearingKeys}
         difficulty={difficulty}

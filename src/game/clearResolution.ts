@@ -7,6 +7,7 @@ import {
   getDifficultyConfig,
   getMissionGoal,
   getMoveLimit,
+  repairBoard,
   getRushStars,
   getStageTarget,
   hasMetStageGoal,
@@ -15,6 +16,8 @@ import {
 } from "../gameCore";
 import { createHintState, sleep } from "./hints";
 import { getActiveBoardSize } from "./session";
+
+const CLEAR_SETTLE_DELAY = 160;
 
 export function describeSummary(summary) {
   const parts = [];
@@ -193,7 +196,7 @@ export async function resolveSuccessfulClear({
     playSound("fever");
   }
 
-  await sleep(190);
+  await sleep(CLEAR_SETTLE_DELAY);
 
   if (actionVersionRef.current !== actionVersion) {
     return;
@@ -229,7 +232,17 @@ export async function resolveSuccessfulClear({
     random: nextRandom,
   });
 
-  nextIdRef.current = refilledBoard.nextId;
+  const repairedBoard = repairBoard({
+    board: refilledBoard.board,
+    modeKey: liveState.modeKey,
+    level: liveState.level,
+    difficultyKey: liveState.difficultyKey,
+    boardSizeOverride: activeBoardSize,
+    nextId: refilledBoard.nextId,
+    random: nextRandom,
+  });
+
+  nextIdRef.current = repairedBoard.nextId;
 
   const nextScore = liveState.score + gain;
   const nextStageScore = liveState.stageScore + gain;
@@ -241,7 +254,7 @@ export async function resolveSuccessfulClear({
 
   let nextState = {
     ...liveState,
-    board: refilledBoard.board,
+    board: repairedBoard.board,
     previewChain: [],
     previewStartKey: null,
     previewValid: false,

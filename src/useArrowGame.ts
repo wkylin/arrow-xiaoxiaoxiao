@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   FEVER_DURATION,
   buildRandomBoard,
@@ -11,6 +11,7 @@ import {
   hasMetStageGoal,
   isFeverActive,
   keyOf,
+  repairBoard,
 } from "./gameCore";
 import {
   buildGameOverStateForReason,
@@ -65,6 +66,7 @@ export function useArrowGame() {
   const boardRef = useRef(null);
   const boardFrameRef = useRef(null);
   const particleLayerRef = useRef(null);
+  const lastRenderableBoardRef = useRef(state.board);
 
   useEffect(() => {
     gameRef.current = state;
@@ -79,6 +81,7 @@ export function useArrowGame() {
   }, []);
 
   const nextRandom = useCallback(() => randomRef.current(), []);
+  const boardHasGaps = useCallback((board) => board.some((row) => row.some((cell) => !cell)), []);
 
   const makeFreshBoard = useCallback((modeKey, level, missionGoal, missionCollected, difficultyKey, boardSizeOverride = null) => {
     const initialBoard = buildRandomBoard({ modeKey, level, difficultyKey, boardSizeOverride, nextId: nextIdRef.current, random: nextRandom });
@@ -124,6 +127,39 @@ export function useArrowGame() {
       },
     }),
     [makeFreshBoard],
+  );
+
+  const repairCurrentBoard = useCallback(
+    (statusText = "箭阵出现了空位，已自动补齐。") => {
+      const currentState = gameRef.current;
+      if (!currentState.board.length) {
+        return;
+      }
+
+      const activeBoardSize = getActiveBoardSize(currentState.modeKey, currentState.customBoardSize);
+      const repaired = repairBoard({
+        board: currentState.board,
+        modeKey: currentState.modeKey,
+        level: currentState.level,
+        difficultyKey: currentState.difficultyKey,
+        boardSizeOverride: activeBoardSize,
+        nextId: nextIdRef.current,
+        random: nextRandom,
+      });
+
+      nextIdRef.current = repaired.nextId;
+      applyState((liveState) => ({
+        ...liveState,
+        board: repaired.board,
+        previewChain: [],
+        previewStartKey: null,
+        previewValid: false,
+        clearingKeys: [],
+        isLocked: false,
+        statusText,
+      }));
+    },
+    [applyState, nextRandom],
   );
 
   const ensureAudioContext = useCallback(
@@ -341,8 +377,17 @@ export function useArrowGame() {
   }, [updateChallengeStatus]);
 
   const shareChallengeLink = useCallback(() => {
-    applyState((currentState) => openShareModalState(currentState));
-  }, [applyState]);
+    const currentState = gameRef.current;
+    if (currentState.modeKey === "endless") {
+      applyState((liveState) => openShareModalState(liveState));
+      return;
+    }
+
+    void shareChallengeViaSystemAction({
+      currentState,
+      updateChallengeStatus,
+    });
+  }, [applyState, updateChallengeStatus]);
 
   const closeShareModal = useCallback(() => {
     applyState((currentState) => closeShareModalState(currentState));
@@ -389,6 +434,11 @@ export function useArrowGame() {
         return;
       }
 
+      if (!currentState.board[row]?.[col]) {
+        repairCurrentBoard();
+        return;
+      }
+
       const result = getChain(currentState.board, row, col, getRequiredClearLength(currentState));
       applyState({
         ...currentState,
@@ -398,7 +448,7 @@ export function useArrowGame() {
         statusText: previewDescription(currentState.board, result),
       });
     },
-    [applyState, previewDescription],
+    [applyState, previewDescription, repairCurrentBoard],
   );
 
   const buildLevelUpState = useCallback(
@@ -439,6 +489,11 @@ export function useArrowGame() {
         return;
       }
 
+      if (!currentState.board[row]?.[col]) {
+        repairCurrentBoard();
+        return;
+      }
+
       const result = getChain(currentState.board, row, col, getRequiredClearLength(currentState));
       if (!result.valid) {
         applyState({
@@ -456,7 +511,7 @@ export function useArrowGame() {
 
       handleSuccessfulClear(result);
     },
-    [applyState, handleSuccessfulClear, playSound, shakeBoard],
+    [applyState, handleSuccessfulClear, playSound, repairCurrentBoard, shakeBoard],
   );
 
   const shuffleBoard = useCallback(() => {
@@ -522,6 +577,25 @@ export function useArrowGame() {
   useEffect(() => {
     document.body.dataset.mode = state.modeKey;
   }, [state.modeKey]);
+
+  const stateBoardHasGaps = state.board.length > 0 && boardHasGaps(state.board);
+
+  if (state.board.length > 0 && !stateBoardHasGaps) {
+    lastRenderableBoardRef.current = state.board;
+  }
+
+  const renderBoard =
+    stateBoardHasGaps && lastRenderableBoardRef.current.length > 0
+      ? lastRenderableBoardRef.current
+      : state.board;
+
+  useLayoutEffect(() => {
+    if (!state.board.length || state.isGameOver || !stateBoardHasGaps) {
+      return;
+    }
+
+    repairCurrentBoard();
+  }, [repairCurrentBoard, state.board, state.isGameOver, stateBoardHasGaps]);
 
   useEffect(() => {
     const handleFirstPointer = () => {
@@ -638,6 +712,7 @@ export function useArrowGame() {
 
   return {
     state,
+    renderBoard,
     refs: {
       boardRef,
       boardFrameRef,
