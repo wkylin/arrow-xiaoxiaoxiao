@@ -2,6 +2,16 @@
 
 这是一个已经改成 `Vite + React` 结构的竖屏 H5 小游戏原型。
 
+## 版权与使用说明
+
+这个仓库当前是公开可见，但它不是一个可自由复用的开源项目。
+
+- 仓库代码、玩法设计、视觉表现和文案默认保留全部权利。
+- 未经书面许可，不允许复制、修改、二次发布、商用或部署衍生版本。
+- 具体约束见根目录 [LICENSE](./LICENSE)。
+
+如果你的目标是“页面公开可访问，但源码尽量别暴露”，可以按 [docs/private-source-pages-plan.md](./docs/private-source-pages-plan.md) 把项目拆成“私有源码仓 + 公共发布仓”。
+
 ## 技术栈
 
 - `Vite`
@@ -103,3 +113,12 @@ pnpm preview
 - 推送到 `main` 分支后会自动构建并发布 `dist/` 到 GitHub Pages。
 - 仓库的 Pages Source 需要在 GitHub 仓库设置里切到 `Deploy from a branch`，并选择 `gh-pages` 分支的 `/ (root)`。
 - `vite.config.ts` 已改为相对 `base`，适合直接挂在 GitHub Pages 项目路径下。
+
+## 源码保护建议
+
+如果你准备长期做这个项目，建议不要继续把开发主仓放在 public。
+
+- 开发主仓改为 `private`
+- 新建一个全新的 `public` 仓，只放打包后的静态产物
+- Pages 只从公共发布仓发布
+- 详细迁移步骤见 [docs/private-source-pages-plan.md](./docs/private-source-pages-plan.md)
