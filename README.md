@@ -101,5 +101,5 @@ pnpm preview
 仓库已包含 `.github/workflows/deploy-pages.yml` 工作流。
 
 - 推送到 `main` 分支后会自动构建并发布 `dist/` 到 GitHub Pages。
-- 仓库的 Pages Source 需要在 GitHub 仓库设置里切到 `GitHub Actions`。
+- 仓库的 Pages Source 需要在 GitHub 仓库设置里切到 `Deploy from a branch`，并选择 `gh-pages` 分支的 `/ (root)`。
 - `vite.config.ts` 已改为相对 `base`，适合直接挂在 GitHub Pages 项目路径下。
