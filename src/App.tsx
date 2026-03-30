@@ -77,14 +77,12 @@ export default function App(): JSX.Element {
   const requiredLength = feverActive ? difficulty.feverClearLength : difficulty.baseClearLength;
   const seedModeLabel = formatSeedModeLabel(state.seedMode);
   const canApplySeedInput = Boolean(state.seedInput.trim());
-  const challengeShareUrl = endlessMode
-    ? helpers.buildChallengeShareUrl({
-        modeKey: state.modeKey,
-        difficultyKey: state.difficultyKey,
-        customBoardSize: state.customBoardSize,
-        activeSeedCode: state.activeSeedCode,
-      })
-    : "";
+  const challengeShareUrl = helpers.buildChallengeShareUrl({
+    modeKey: state.modeKey,
+    difficultyKey: state.difficultyKey,
+    customBoardSize: state.customBoardSize,
+    activeSeedCode: state.activeSeedCode,
+  });
   const qrDataUrl = useMemo(() => {
     if (!state.shareModalOpen || !challengeShareUrl) {
       return "";
@@ -238,8 +236,12 @@ export default function App(): JSX.Element {
         open={state.shareModalOpen}
         qrDataUrl={qrDataUrl}
         shareUrl={challengeShareUrl}
-        title={`扫码挑战 · ${difficulty.label} · ${boardLabel}`}
-        subtitle={`挑战码：${state.activeSeedCode}。朋友扫码后会直接打开同一盘。`}
+        title={endlessMode ? `扫码挑战 · ${difficulty.label} · ${boardLabel}` : `分享这局 · ${mode.name} · ${difficulty.label}`}
+        subtitle={
+          endlessMode
+            ? `挑战码：${state.activeSeedCode}。朋友扫码后会直接打开同一盘。`
+            : `当前得分：${formatNumber(state.score)}。可以扫码打开，或直接复制链接发给朋友。`
+        }
         onClose={actions.closeShareModal}
         onCopyLink={actions.copyChallengeLink}
         onSystemShare={actions.shareChallengeViaSystem}

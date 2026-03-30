@@ -116,10 +116,6 @@ export async function shareChallengeViaSystemAction({ currentState, updateChalle
 }
 
 export function openShareModalState(currentState) {
-  if (currentState.modeKey !== "endless") {
-    return currentState;
-  }
-
   return {
     ...currentState,
     shareModalOpen: true,

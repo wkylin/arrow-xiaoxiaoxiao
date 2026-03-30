@@ -377,17 +377,8 @@ export function useArrowGame() {
   }, [updateChallengeStatus]);
 
   const shareChallengeLink = useCallback(() => {
-    const currentState = gameRef.current;
-    if (currentState.modeKey === "endless") {
-      applyState((liveState) => openShareModalState(liveState));
-      return;
-    }
-
-    void shareChallengeViaSystemAction({
-      currentState,
-      updateChallengeStatus,
-    });
-  }, [applyState, updateChallengeStatus]);
+    applyState((liveState) => openShareModalState(liveState));
+  }, [applyState]);
 
   const closeShareModal = useCallback(() => {
     applyState((currentState) => closeShareModalState(currentState));

@@ -16,7 +16,7 @@ export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle
 
   return (
     <div className="share-modal-backdrop" role="presentation" onClick={onClose}>
-      <section className="share-modal" role="dialog" aria-modal="true" aria-label="二维码分享弹层" onClick={(e) => e.stopPropagation()}>
+      <section className="share-modal" role="dialog" aria-modal="true" aria-label="分享弹层" onClick={(e) => e.stopPropagation()}>
         <div className="share-modal-head">
           <div>
             <h3>{title}</h3>
@@ -27,7 +27,7 @@ export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle
 
         <div className="share-qr-card">
           {qrDataUrl ? (
-            <img className="share-qr-image" src={qrDataUrl} alt="挑战二维码" />
+            <img className="share-qr-image" src={qrDataUrl} alt="分享二维码" />
           ) : (
             <div className="share-qr-fallback">这条链接有点长，二维码暂时生成失败，请直接复制下方链接。</div>
           )}
