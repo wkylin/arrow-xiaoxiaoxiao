@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -34,20 +34,14 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Verify deploy token
-        run: |
-          if [ -z "${{ secrets.PUBLIC_SITE_PAT }}" ]; then
-            echo "::error::Missing PUBLIC_SITE_PAT secret in wkylin/arrow-xiaoxiaoxiao-src"
-            exit 1
-          fi
-
-      - name: Publish dist to public site repo
+      - name: Publish dist to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
-          personal_token: ${{ secrets.PUBLIC_SITE_PAT }}
-          external_repository: wkylin/arrow-xiaoxiaoxiao-site
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           publish_branch: gh-pages
+          force_orphan: true
+          enable_jekyll: false
           user_name: github-actions[bot]
           user_email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit_message: "deploy: publish from private source repo"
+          commit_message: "deploy: publish current site"
