@@ -4,13 +4,13 @@ import { cx } from "./helpers";
 import { BoardCell } from "./components/BoardCell";
 import { DifficultyButton, GuideStep, MeterBlock, ModeButton, SizeButton, TipCard } from "./components/basic";
 
-export function MinimalHeaderSection({ actions, boardLabel, difficulty, mode, onOpenGuide, onOpenMenu, state }) {
+export function MinimalHeaderSection({ actions, boardLabel, difficulty, installAction, mode, onOpenGuide, state }) {
   return (
     <header className="minimal-header">
       <div className="header-main">
         <div className="header-copy">
-          <h1 className="minimal-title">箭阵！消消消</h1>
-          <p className="header-slogan">一笔成链，越绕越爽</p>
+          <h1 className="minimal-title">箭指极境</h1>
+          <p className="header-slogan">无限风光在极境，直抵终点方大成！</p>
         </div>
         <div className="header-actions">
           <button className="icon-btn subtle-help-btn" type="button" onClick={onOpenGuide} aria-label="查看玩法说明">
@@ -25,45 +25,36 @@ export function MinimalHeaderSection({ actions, boardLabel, difficulty, mode, on
           >
             {state.soundEnabled ? "🔊" : "🔈"}
           </button>
-          <button className="icon-btn" type="button" onClick={onOpenMenu} aria-label="打开玩法与设置">
-            ☰
-          </button>
         </div>
       </div>
       <div className="header-badges">
-        <span className="meta-chip strong">{mode.name}</span>
-        <span className="meta-chip">{difficulty.label}</span>
-        <span className="meta-chip">{boardLabel}</span>
+        <div className="header-chip-cluster">
+          <span className="meta-chip strong">{mode.name}</span>
+          <span className="meta-chip">{difficulty.label}</span>
+          <span className="meta-chip">{boardLabel}</span>
+        </div>
+        {installAction ? (
+          <button className="meta-chip install-chip-btn" type="button" onClick={installAction.onClick}>
+            {installAction.label}
+          </button>
+        ) : null}
       </div>
     </header>
   );
 }
 
-export function MissionControlSection({ feverText, feverWidth, levelValue, missionText, progressText, resourceLabel, resourceValue, scoreText, state }) {
+export function ChallengeBriefSection({
+  feverText,
+  feverWidth,
+  progressText,
+  state,
+}) {
   return (
-    <section className="mission-panel">
-      <div className="mission-primary">
-        <span className="mission-label">当前目标</span>
-        <strong className="mission-value">{missionText}</strong>
+    <section className="challenge-brief">
+      <div className="challenge-meter-grid">
+        <MeterBlock label="极境进度" value={progressText} fillClassName="stage-fill" width={state.targetScore ? (state.stageScore / state.targetScore) * 100 : 0} />
+        <MeterBlock label="狂热" value={feverText} fillClassName="fever-fill" width={feverWidth} />
       </div>
-
-      <div className="live-strip">
-        <div className="live-pill">
-          <span>总分</span>
-          <strong>{scoreText}</strong>
-        </div>
-        <div className="live-pill">
-          <span>阶段</span>
-          <strong>{levelValue}</strong>
-        </div>
-        <div className="live-pill">
-          <span>{resourceLabel}</span>
-          <strong>{resourceValue}</strong>
-        </div>
-      </div>
-
-      <MeterBlock label="进度" value={progressText} fillClassName="stage-fill" width={state.targetScore ? (state.stageScore / state.targetScore) * 100 : 0} />
-      <MeterBlock label="狂热" value={feverText} fillClassName="fever-fill" width={feverWidth} />
     </section>
   );
 }
@@ -72,9 +63,9 @@ export function CompactRulesSection({ onOpenGuide, requiredLength }: { onOpenGui
   return (
     <section className="compact-rules">
       <div className="rule-pill-row">
-        <span className="rule-pill">点任意格子</span>
-        <span className="rule-pill">看数字顺序</span>
-        <span className="rule-pill accent">满 {requiredLength} 格消除</span>
+        <span className="rule-pill">先找起点</span>
+        <span className="rule-pill">按箭头走</span>
+        <span className="rule-pill accent">{`至少 ${requiredLength} 格，最好直取上限`}</span>
       </div>
       <button className="secondary-btn learn-btn" type="button" onClick={onOpenGuide}>怎么玩？</button>
     </section>
@@ -84,38 +75,60 @@ export function CompactRulesSection({ onOpenGuide, requiredLength }: { onOpenGui
 export function BattleBoardSection({
   actions,
   board,
-  boardLabel,
+  boardTimerText,
   boardStyle,
   clearingKeys,
+  clearingOrderMap,
   difficulty,
   disabled,
   endlessMode,
   feverActive,
+  levelValue,
   mode,
+  currentPathKey,
   previewKeys,
   previewOrderMap,
   refs,
   state,
 }: any) {
   const boardStatusLabel =
-    state.isLocked
-      ? "结算中"
-      : feverActive
-        ? "狂热中"
-        : state.previewChain.length
-          ? state.previewValid
-            ? "可消除"
-            : "预览"
-          : "战况";
+    state.isGameOver
+      ? "本局结束"
+      : state.isLocked
+      ? "庆祝中"
+      : state.awaitingStart
+        ? "待开局"
+      : state.pathInProgress
+        ? "寻路中"
+        : feverActive
+          ? "狂热中"
+          : state.previewChain.length
+          ? "提示"
+            : "待出手";
 
   return (
     <section className="board-panel board-panel-minimal">
       <div className="board-head minimal-board-head">
-        <div>
-          <h2 id="board-title">当前棋盘</h2>
+        <div className="board-header-copy">
+          <span className="board-level-chip">{`当前级别 ${levelValue}`}</span>
+          <div className="board-steps" aria-label="挑战步骤">
+            <span className="board-step">1. 定起点</span>
+            <span className="board-step">2. 连路径</span>
+            <span className="board-step">3. 战极限</span>
+          </div>
         </div>
-        <span id="fever-badge" className={cx("fever-badge", feverActive && "active")} aria-hidden={!feverActive}>狂热</span>
+        <div className="board-corner-stack">
+          <span className={cx("board-timer-chip", state.boardTimeLeft <= 3 && "urgent")}>{`时间 ${boardTimerText}`}</span>
+          <span id="fever-badge" className={cx("fever-badge", feverActive && "active")} aria-hidden={!feverActive}>狂热</span>
+        </div>
       </div>
+
+      <section className="board-status-shell board-status-shell-top" aria-live="polite">
+        <span className={cx("board-status-badge", state.isGameOver && "preview", feverActive && "fever", state.previewChain.length && state.previewValid && "success", state.previewChain.length && !state.previewValid && "preview")}>
+          {boardStatusLabel}
+        </span>
+        <p id="status-text" className="board-status-text">{state.statusText}</p>
+      </section>
 
       <div ref={refs.boardFrameRef} className={cx("board-frame", feverActive && "is-fever")} style={boardStyle}>
         <div ref={refs.boardRef} className="board" style={boardStyle} onMouseLeave={actions.handleBoardLeave}>
@@ -129,8 +142,10 @@ export function BattleBoardSection({
                 previewKeys={previewKeys}
                 previewOrder={previewOrderMap.get(keyOf(rowIndex, colIndex))}
                 previewStartKey={state.previewStartKey}
+                currentPathKey={currentPathKey}
                 previewValid={state.previewValid}
                 clearingKeys={clearingKeys}
+                clearingOrder={clearingOrderMap.get(keyOf(rowIndex, colIndex))}
                 disabled={disabled}
                 onPreview={() => actions.previewCell(rowIndex, colIndex)}
                 onClick={() => actions.clickCell(rowIndex, colIndex)}
@@ -140,18 +155,23 @@ export function BattleBoardSection({
         </div>
         <div ref={refs.particleLayerRef} className="particle-layer" aria-hidden="true" />
       </div>
-
-      <section className="board-status-shell" aria-live="polite">
-        <span className={cx("board-status-badge", feverActive && "fever", state.previewChain.length && state.previewValid && "success", state.previewChain.length && !state.previewValid && "preview")}>
-          {boardStatusLabel}
-        </span>
-        <p id="status-text" className="board-status-text">{state.statusText}</p>
-      </section>
     </section>
   );
 }
 
-export function StickyActionBarSection({ actions, disabled, onOpenChallenge, onOpenMenu }: any) {
+export function StickyActionBarSection({ actions, awaitingStart, disabled, gameOver }: any) {
+  const playDisabled = disabled || gameOver || awaitingStart;
+  const restartLabel = awaitingStart ? "开始挑战" : "重新开局";
+  const handleRestart = awaitingStart
+    ? () => { if (typeof actions.startChallenge === "function") actions.startChallenge(); }
+    : () => {
+        if (typeof actions.requestRestart === "function") {
+          actions.requestRestart();
+        } else if (typeof actions.resetGame === "function") {
+          actions.resetGame();
+        }
+      };
+
   return (
     <section className="sticky-action-bar">
       <div className="sticky-action-grid">
@@ -160,18 +180,18 @@ export function StickyActionBarSection({ actions, disabled, onOpenChallenge, onO
           className="secondary-btn"
           type="button"
           onClick={() => { if (typeof actions.showHint === "function") actions.showHint(); }}
-          disabled={disabled}
+          disabled={playDisabled}
         >提示</button>
 
-        <button id="shuffle-btn" className="primary-btn" type="button" onClick={actions.shuffleBoard} disabled={disabled}>重组</button>
+        <button id="shuffle-btn" className="secondary-btn" type="button" onClick={actions.shuffleBoard} disabled={playDisabled}>重组</button>
 
         <button
           id="restart-btn"
           className="secondary-btn"
           type="button"
-          onClick={() => { if (typeof actions.requestRestart === "function") { actions.requestRestart(); } else if (typeof actions.resetGame === "function") { actions.resetGame(); } }}
+          onClick={handleRestart}
           disabled={disabled}
-        >重新开局</button>
+        >{restartLabel}</button>
 
         <button id="share-btn" className="secondary-btn" type="button" onClick={() => { if (typeof actions.shareChallengeLink === "function") actions.shareChallengeLink(); }}>分享</button>
       </div>
@@ -202,15 +222,14 @@ export function BottomDrawerShellSection({ activePanel, children, onClose, onSel
           <div className="drawer-handle" />
           <div className="drawer-head">
             <div>
-              <h2>玩法与设置</h2>
-              <p className="drawer-desc">想看规则、换难度、开挑战，都在这里。</p>
+              <h2>玩法与挑战</h2>
+              <p className="drawer-desc">先懂规则，再去挑战极境。</p>
             </div>
             <button className="icon-btn" type="button" onClick={onClose} aria-label="关闭抽屉">✕</button>
           </div>
 
           <div className="drawer-tabs">
             <button className={cx("drawer-tab", activePanel === "guide" && "active")} type="button" onClick={() => onSelectPanel("guide")}>玩法</button>
-            <button className={cx("drawer-tab", activePanel === "settings" && "active")} type="button" onClick={() => onSelectPanel("settings")}>设置</button>
             <button className={cx("drawer-tab", activePanel === "challenge" && "active")} type="button" onClick={() => onSelectPanel("challenge")}>挑战</button>
           </div>
 
@@ -241,7 +260,7 @@ export function ConfirmRestartModal({ open, onConfirm, onCancel }: { open: boole
   );
 }
 
-export function GameOverModal({ open, score, onRequestRestart, onShare, onClose }: { open: boolean; score: number; onRequestRestart: () => void; onShare: () => void; onClose: () => void }) {
+export function GameOverModal({ message, open, score, title, onRequestRestart, onShare, onClose }: { message: string; open: boolean; score: number; title: string; onRequestRestart: () => void; onShare: () => void; onClose: () => void }) {
   if (!open) return null;
 
   return (
@@ -249,7 +268,8 @@ export function GameOverModal({ open, score, onRequestRestart, onShare, onClose 
       <div className="starter-backdrop" />
       <section className="starter-overlay" role="dialog" aria-modal="true" aria-label="局终态">
         <div className="starter-card">
-          <h2>时间到！</h2>
+          <h2>{title}</h2>
+          <p>{message}</p>
           <p>最终得分：{score}</p>
           <div className="starter-actions">
             <button className="secondary-btn" type="button" onClick={onShare}>分享成绩</button>
@@ -259,6 +279,35 @@ export function GameOverModal({ open, score, onRequestRestart, onShare, onClose 
         </div>
       </section>
     </>
+  );
+}
+
+export function InstallGuideModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+
+  return (
+    <div className="share-modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="share-modal install-guide-modal" role="dialog" aria-modal="true" aria-label="添加到主屏幕说明" onClick={(event) => event.stopPropagation()}>
+        <div className="share-modal-head">
+          <div>
+            <h3>添加到主屏幕</h3>
+            <p className="share-modal-desc">在 iPhone 上请用 Safari 打开，然后按下面两步操作。</p>
+          </div>
+          <button className="icon-btn share-close-btn" type="button" onClick={onClose} aria-label="关闭安装说明">X</button>
+        </div>
+
+        <div className="install-guide-steps">
+          <article className="install-guide-step">
+            <span className="install-guide-index">1</span>
+            <p>点 Safari 底部的分享按钮。</p>
+          </article>
+          <article className="install-guide-step">
+            <span className="install-guide-index">2</span>
+            <p>选择“添加到主屏幕”，确认后就能像 App 一样打开。</p>
+          </article>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -285,7 +334,11 @@ export function SettingsDrawerSection({ actions, bestScore, boardLabel, difficul
       <section className="difficulty-panel">
         <div className="difficulty-head">
           <strong>难度等级</strong>
-          <span className="difficulty-desc">{`${difficulty.label} · ${boardLabel}：${difficulty.desc}`}</span>
+          <span className="difficulty-desc">
+            {state.modeKey === "classic"
+              ? `${difficulty.label}：主线会从 4×4 逐步升到 12×12，难度主要影响容错、提示门槛和重组成本。`
+              : `${difficulty.label} · ${boardLabel}：${difficulty.desc}`}
+          </span>
         </div>
         <div className="difficulty-switch" role="tablist" aria-label="难度切换">
           {Object.values(DIFFICULTIES).map((item) => (
@@ -312,17 +365,29 @@ export function SettingsDrawerSection({ actions, bestScore, boardLabel, difficul
 }
 
 export function ChallengeDrawerSection({ actions, canApplySeedInput, endlessMode, seedModeLabel, shareFeedback, state }: any) {
+  const currentModeLabel = endlessMode ? "同盘挑战" : "主线极境";
+
   if (!endlessMode) {
     return (
-      <section className="seed-panel">
-        <div className="difficulty-head">
-          <strong>挑战码只在无尽模式开放</strong>
-          <span className="difficulty-desc">想反复挑战同一盘面、发二维码给朋友或玩每日挑战，就切到无尽模式。</span>
-        </div>
-        <div className="seed-actions">
-          <button className="secondary-btn seed-btn" type="button" onClick={() => actions.switchMode("endless")}>切到无尽模式</button>
-        </div>
-      </section>
+      <div className="drawer-stack">
+        <section className="difficulty-panel">
+          <div className="difficulty-head">
+            <strong>挑战模式</strong>
+            <span className="difficulty-desc">主线从 4×4 开始，越强的人，越能一路冲进更大的极境。</span>
+          </div>
+          <div className="mode-switch" role="tablist" aria-label="挑战模式切换">
+            <ModeButton key="classic" modeKey="classic" active label="主线极境" onClick={() => actions.switchMode("classic")} />
+            <ModeButton key="endless" modeKey="endless" active={false} label="同盘挑战" onClick={() => actions.switchMode("endless")} />
+          </div>
+        </section>
+
+        <section className="seed-panel">
+          <div className="difficulty-head">
+            <strong>当前主线</strong>
+            <span className="difficulty-desc">一路升级即可。想和朋友解同一盘，切到“同盘挑战”。</span>
+          </div>
+        </section>
+      </div>
     );
   }
 
@@ -334,11 +399,22 @@ export function ChallengeDrawerSection({ actions, canApplySeedInput, endlessMode
 
   return (
     <div className="drawer-stack">
+      <section className="difficulty-panel">
+        <div className="difficulty-head">
+          <strong>挑战模式</strong>
+          <span className="difficulty-desc">当前是同盘挑战。你可以锁定同一题，反复冲刺更强解法。</span>
+        </div>
+        <div className="mode-switch" role="tablist" aria-label="挑战模式切换">
+          <ModeButton key="classic" modeKey="classic" active={false} label="主线极境" onClick={() => actions.switchMode("classic")} />
+          <ModeButton key="endless" modeKey="endless" active label="同盘挑战" onClick={() => actions.switchMode("endless")} />
+        </div>
+      </section>
+
       <section className="seed-panel">
         <div className="seed-head">
           <div className="difficulty-head">
-            <strong>挑战种子</strong>
-            <span className="difficulty-desc">同一码 + 同难度 + 同尺寸 = 同一盘面，适合练同一题。</span>
+            <strong>{currentModeLabel}</strong>
+            <span className="difficulty-desc">同一码就是同一盘，适合自己反复练，也适合发给朋友直接对战。</span>
           </div>
           <span className="seed-mode-badge">{seedModeLabel}</span>
         </div>
@@ -400,29 +476,28 @@ export function GuideDrawerSection({ boardLabel, difficulty, endlessMode, mode, 
   return (
     <div className="drawer-stack">
       <div className="guide-steps">
-        <GuideStep key="1" index="1" title="点一个起点" text="不是自己拉线，也不是凑三个相同图案。" />
-        <GuideStep key="2" index="2" title="系统会自动前进" text="它会沿箭头一直走到出界，或撞到已走过的格子形成闭环。" />
+        <GuideStep key="1" index="1" title="定起点" text="一步定生死，选错即重置。" />
+        <GuideStep key="2" index="2" title="连路径" text="紧跟箭头，直抵终点，中途不能走偏。" />
         <GuideStep
           key="3"
           index="3"
-          title={`够 ${requiredLength} 格就会消除`}
+          title="战极限"
           text={
             endlessMode
-              ? `当前 ${difficulty.label} · ${boardLabel}，没有时间和步数限制。`
-              : `当前 ${difficulty.label} · ${boardLabel}，目标和资源会随难度变化。`
+              ? `致远方见绝色，极境始获全胜。当前 ${boardLabel} 不限次数重试，专心把最优解打出来。`
+              : `致远方见绝色，极境始获全胜。主线会从 4×4 一路升级，越往后越考验你。`
           }
         />
       </div>
 
-      <div className="tips-grid">
-        <TipCard key="how" title="这一局的重点" text={mode.tips} />
-        <TipCard
-          key="difficulty"
-          title="这局先盯住什么"
-          text={`优先找长链和闭环。当前难度下，普通状态至少 ${difficulty.baseClearLength} 格，狂热状态至少 ${difficulty.feverClearLength} 格。`}
-          emphasis
-        />
-      </div>
+      <TipCard
+        key="guide-focus"
+        title="这一局先看什么"
+        text={endlessMode
+          ? `先看上限和起点分布，再决定从哪里出手。当前 ${difficulty.label} · ${boardLabel}，找错了会立刻清空这次路线。`
+          : `主线会自动升盘。当前 ${difficulty.label} · ${boardLabel}，至少 ${requiredLength} 格才能形成有效路线，但真正过关还是要命中本盘最优。`}
+        emphasis
+      />
     </div>
   );
 }
@@ -440,16 +515,16 @@ export function QuickStartOverlaySection({ onDismiss, onOpenGuide, open, require
           <h2>你只需要记住这三步</h2>
           <div className="starter-steps">
             <div className="starter-step">
-              <strong>1. 点任意格子</strong>
-              <p>它只是起点。</p>
+              <strong>1. 先找最优起点</strong>
+              <p>系统只告诉你上限，不会替你走。</p>
             </div>
             <div className="starter-step">
-              <strong>2. 看数字顺序</strong>
-              <p>系统会自动沿箭头走。</p>
+              <strong>2. 按箭头逐格点击</strong>
+              <p>每一步都要点到唯一正确的下一格。</p>
             </div>
             <div className="starter-step">
-              <strong>{`3. 满 ${requiredLength} 格就消除`}</strong>
-              <p>走出边界或闭环后再结算。</p>
+              <strong>3. 必须命中本盘最优</strong>
+              <p>{`至少要能走满 ${requiredLength} 格，最后还得打到这一盘的最高长度。`}</p>
             </div>
           </div>
           <div className="starter-actions">

@@ -11,10 +11,11 @@ import {
   getStageTarget,
   normalizeSeedCode,
 } from "../gameCore";
+import { getClassicChallengeLevelMeta, resolveBoardSizeForRun, resolveBoardTimeLimitForState, resolveStageProgressState } from "./challengeProgression";
 
-export const IDLE_STATUS = "点击格子直接消除，鼠标悬停或手指按下可预览路径。";
-export const RESET_STATUS = "新的一局开始了，优先寻找长链和闭环。闯关模式记得顺手收集星钻。";
-export const ENDLESS_RESET_STATUS = "无尽模式开始了，先跟着发光起点找长链。";
+export const IDLE_STATUS = "先找最优起点，再按箭头逐格点击到尽头。";
+export const RESET_STATUS = "新题已就绪，先观察全盘，准备好就开始挑战。";
+export const ENDLESS_RESET_STATUS = "新题已就绪，这一盘轮到你自己找最优路线。";
 const QUICKSTART_STORAGE_KEY = "arrow-quickstart-dismissed";
 
 export function getStorageItem(key, fallback) {
@@ -229,26 +230,53 @@ export function createBootstrapState() {
 
   const { activeSeedCode, dailyChallengeCode } = resolveSeedSession(modeKey, seedMode, seedInput);
   const difficulty = getDifficultyConfig(difficultyKey);
-  const activeBoardSize = getActiveBoardSize(modeKey, customBoardSize);
+  const activeBoardSize = resolveBoardSizeForRun({
+    modeKey,
+    level: 1,
+    difficultyKey,
+    customBoardSize: getActiveBoardSize(modeKey, customBoardSize),
+  });
   const bestKey = getBestScoreKey(modeKey, difficultyKey, activeBoardSize);
+  const targetScore = getStageTarget(modeKey, 1, difficultyKey, activeBoardSize);
+  const stageProgressState = resolveStageProgressState({
+    modeKey,
+    level: 1,
+    difficultyKey,
+    customBoardSize: activeBoardSize,
+    fallbackStageScore: 0,
+    fallbackTargetScore: targetScore,
+  });
+  const boardTimeLimit = resolveBoardTimeLimitForState({
+    modeKey,
+    level: 1,
+    difficultyKey,
+  });
 
   return {
     board: [],
+    awaitingStart: true,
     previewChain: [],
     previewStartKey: null,
-    previewValid: false,
+    previewValid: true,
     clearingKeys: [],
+    pathInProgress: false,
+    currentPathKey: null,
+    expectedNextKey: null,
+    pathTargetLength: 0,
+    pathTargetStarts: 0,
+    boardTimeLimit,
+    boardTimeLeft: boardTimeLimit,
     score: 0,
-    stageScore: 0,
+    stageScore: stageProgressState.stageScore,
     level: 1,
-    targetScore: getStageTarget(modeKey, 1, difficultyKey, activeBoardSize),
+    targetScore: stageProgressState.targetScore,
     missionGoal: getMissionGoal(modeKey, 1, difficultyKey),
     missionCollected: 0,
     combo: 1,
     bestScores: {
       [bestKey]: getStoredBestScore(modeKey, difficultyKey, customBoardSize),
     },
-    timeLeft: modeKey === "classic" ? difficulty.classicTimeLimit : 0,
+    timeLeft: 0,
     movesLeft: modeKey === "rush" ? getMoveLimit(1, difficultyKey) : 0,
     lastClearAt: 0,
     feverCharge: 0,
@@ -265,6 +293,7 @@ export function createBootstrapState() {
     isLocked: false,
     isGameOver: false,
     suppressGameOverUntilReset: false,
+    gameOverTitle: null,
     statusText: IDLE_STATUS,
   };
 }

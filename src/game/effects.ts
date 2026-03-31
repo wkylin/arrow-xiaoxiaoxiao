@@ -139,6 +139,81 @@ export function spawnFloatingTextEffect({ particleLayerRef, timeoutIdsRef, text,
   });
 }
 
+function getBurstOrigin({ boardFrameRef, boardRef, row = null, col = null }) {
+  if (!boardFrameRef.current) {
+    return null;
+  }
+
+  const boardRect = boardFrameRef.current.getBoundingClientRect();
+  if (boardRef.current && row !== null && col !== null) {
+    const cellElement = boardRef.current.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    if (cellElement) {
+      const rect = cellElement.getBoundingClientRect();
+      return {
+        x: rect.left - boardRect.left + rect.width / 2,
+        y: rect.top - boardRect.top + rect.height / 2,
+      };
+    }
+  }
+
+  return {
+    x: boardRect.width / 2,
+    y: boardRect.height / 2,
+  };
+}
+
+export function spawnStatusBurstEffect({
+  boardFrameRef,
+  boardRef,
+  particleLayerRef,
+  timeoutIdsRef,
+  row = null,
+  col = null,
+  text,
+  subtext = "",
+  tone = "mission",
+}) {
+  const origin = getBurstOrigin({ boardFrameRef, boardRef, row, col });
+  if (!origin) {
+    return;
+  }
+
+  const palette =
+    tone === "failure"
+      ? ["#ff8e7c", "#ffce66", "#ff5d91"]
+      : ["#66f5ec", "#ffd766", "#ba8cff"];
+
+  for (let index = 0; index < 14; index += 1) {
+    spawnParticleEffect({
+      particleLayerRef,
+      timeoutIdsRef,
+      x: origin.x,
+      y: origin.y,
+      color: palette[index % palette.length],
+    });
+  }
+
+  spawnFloatingTextEffect({
+    particleLayerRef,
+    timeoutIdsRef,
+    text,
+    x: origin.x,
+    y: origin.y,
+    tone,
+  });
+
+  if (subtext) {
+    spawnFloatingTextEffect({
+      particleLayerRef,
+      timeoutIdsRef,
+      text: subtext,
+      x: origin.x,
+      y: origin.y - 34,
+      tone: `${tone}-subtle`,
+    });
+  }
+}
+
 export function spawnChainParticlesEffect({
   boardSnapshot,
   result,
@@ -198,13 +273,22 @@ export function spawnChainParticlesEffect({
     tone: feverTriggered || feverActive ? "fever" : "score",
   });
 
+  spawnFloatingTextEffect({
+    particleLayerRef,
+    timeoutIdsRef,
+    text: result.chain.length >= 8 ? "你好棒！" : "命中上限！",
+    x: centerX,
+    y: centerY - 46,
+    tone: feverTriggered || feverActive ? "fever" : "mission",
+  });
+
   if (summary.gem) {
     spawnFloatingTextEffect({
       particleLayerRef,
       timeoutIdsRef,
       text: `星钻 +${summary.gem}`,
       x: centerX,
-      y: centerY - 24,
+      y: centerY - 72,
       tone: "mission",
     });
   }
@@ -215,7 +299,7 @@ export function spawnChainParticlesEffect({
       timeoutIdsRef,
       text: "狂热！",
       x: centerX,
-      y: centerY - 48,
+      y: centerY - 96,
       tone: "fever",
     });
   }

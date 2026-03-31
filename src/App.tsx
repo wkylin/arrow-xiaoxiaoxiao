@@ -1,9 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FEVER_DURATION,
-  MAX_CUSTOM_BOARD_SIZE,
-  MIN_CUSTOM_BOARD_SIZE,
-  getBestScoreKey,
   keyOf,
 } from "./gameCore";
 import type { ShareActionResult } from "./game/share";
@@ -14,38 +11,31 @@ import { formatNumber, formatSeedModeLabel, formatSeconds, getBoardMetrics } fro
 import {
   BattleBoardSection,
   BottomDrawerShellSection,
+  ChallengeBriefSection,
   ChallengeDrawerSection,
   GuideDrawerSection,
-  MissionControlSection,
+  InstallGuideModal,
   MinimalHeaderSection,
-  QuickStartOverlaySection,
-  SettingsDrawerSection,
   StickyActionBarSection,
 } from "./ui/sections";
-import { ConfirmRestartModal, GameOverModal } from "./ui/sections";
-
-const QUICKSTART_STORAGE_KEY = "arrow-quickstart-dismissed";
 const SHARE_FEEDBACK_DURATION = 1800;
 
-function shouldShowQuickStart() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  try {
-    return window.localStorage.getItem(QUICKSTART_STORAGE_KEY) !== "1";
-  } catch {
-    return true;
-  }
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{
+    outcome: "accepted" | "dismissed";
+    platform: string;
+  }>;
 }
 
 export default function App(): JSX.Element {
   const { state, renderBoard, refs, actions, helpers } = useArrowGame();
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
-  const [quickStartOpen, setQuickStartOpen] = useState<boolean>(shouldShowQuickStart);
-  const [confirmRestartOpen, setConfirmRestartOpen] = useState<boolean>(false);
   const [drawerShareFeedback, setDrawerShareFeedback] = useState<ShareActionResult | null>(null);
   const [modalShareFeedback, setModalShareFeedback] = useState<ShareActionResult | null>(null);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
+  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
   const drawerShareFeedbackTimeoutRef = useRef<number | null>(null);
   const modalShareFeedbackTimeoutRef = useRef<number | null>(null);
 
@@ -55,10 +45,6 @@ export default function App(): JSX.Element {
   const boardSize = renderBoard.length || (endlessMode ? state.customBoardSize : difficulty.boardSize);
   const boardLabel = `${boardSize}×${boardSize}`;
   const boardStyle = useMemo(() => getBoardMetrics(boardSize), [boardSize]);
-  const sizeOptions = useMemo(
-    () => Array.from({ length: MAX_CUSTOM_BOARD_SIZE - MIN_CUSTOM_BOARD_SIZE + 1 }, (_, index) => MIN_CUSTOM_BOARD_SIZE + index),
-    [],
-  );
   const feverActive = helpers.isFeverActive(state);
   const previewKeys = useMemo(() => new Set(state.previewChain.map(({ row, col }: any) => keyOf(row, col))), [state.previewChain]);
   const previewOrderMap = useMemo(
@@ -66,23 +52,50 @@ export default function App(): JSX.Element {
     [state.previewChain],
   );
   const clearingKeys = useMemo(() => new Set(state.clearingKeys), [state.clearingKeys]);
+  const clearingOrderMap = useMemo(
+    () => new Map(state.clearingKeys.map((cellKey: string, index: number) => [cellKey, index + 1])),
+    [state.clearingKeys],
+  );
   const feverRemain = feverActive ? Math.max(0, state.feverActiveUntil - Date.now()) : 0;
   const feverText = feverActive ? `${(feverRemain / 1000).toFixed(1)}s` : `${Math.round(state.feverCharge)}%`;
   const feverWidth = feverActive ? (feverRemain / FEVER_DURATION) * 100 : state.feverCharge;
-  const resourceLabel = state.modeKey === "classic" ? "时间" : state.modeKey === "rush" ? "步数" : "状态";
-  const resourceValue = state.modeKey === "classic" ? formatSeconds(state.timeLeft) : state.modeKey === "rush" ? `${state.movesLeft}` : "无尽";
-  const missionText =
-    state.modeKey === "classic"
-      ? `目标分 ${formatNumber(state.targetScore)}`
-      : state.modeKey === "rush"
-      ? `星钻 ${state.missionCollected}/${state.missionGoal} · 目标分 ${formatNumber(state.targetScore)}`
-      : `里程碑 ${formatNumber(state.targetScore)} 分`;
-  const bestScoreKey = getBestScoreKey(state.modeKey, state.difficultyKey, endlessMode ? state.customBoardSize : null);
-  const bestScore = state.bestScores[bestScoreKey] ?? 0;
-  const disabled = state.isLocked || state.isGameOver;
+  const levelValue = endlessMode ? `第${state.level}段` : `Lv.${state.level}`;
+  const progressText = state.modeKey === "classic"
+    ? `${boardLabel} · ${state.stageScore}/${state.targetScore}`
+    : `${formatNumber(state.stageScore)} / ${formatNumber(state.targetScore)}`;
+  const disabled = state.isLocked;
+  const boardDisabled = state.isLocked || state.isGameOver || state.awaitingStart;
   const requiredLength = feverActive ? difficulty.feverClearLength : difficulty.baseClearLength;
+  const currentPathKey = state.currentPathKey;
+  const boardTimerText = formatSeconds(state.boardTimeLeft);
   const seedModeLabel = formatSeedModeLabel(state.seedMode);
   const canApplySeedInput = Boolean(state.seedInput.trim());
+  const isIosDevice = useMemo(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+  }, []);
+  const installAction = useMemo(() => {
+    if (isStandaloneApp) {
+      return null;
+    }
+
+    if (deferredInstallPrompt) {
+      return {
+        label: "安装到桌面",
+      };
+    }
+
+    if (isIosDevice) {
+      return {
+        label: "添加到主屏幕",
+      };
+    }
+
+    return null;
+  }, [deferredInstallPrompt, isIosDevice, isStandaloneApp]);
   const challengeShareUrl = helpers.buildChallengeShareUrl({
     modeKey: state.modeKey,
     difficultyKey: state.difficultyKey,
@@ -169,26 +182,69 @@ export default function App(): JSX.Element {
     flashShareFeedback("modal", result);
   }, [actions.copyChallengeLink, flashShareFeedback]);
 
-  const shareChallengeFromModal = useCallback(async () => {
-    const result = await actions.shareChallengeViaSystem();
-    flashShareFeedback("modal", result);
-  }, [actions.shareChallengeViaSystem, flashShareFeedback]);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
 
-  const dismissQuickStart = useCallback((panelKey: string | null = null) => {
-    setQuickStartOpen(false);
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    const mediaQuery = window.matchMedia("(display-mode: standalone)");
+    const updateStandaloneState = () => {
+      setIsStandaloneApp(mediaQuery.matches || Boolean(nav.standalone));
+    };
 
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(QUICKSTART_STORAGE_KEY, "1");
-      } catch {
-        // ignore storage failures
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setDeferredInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setDeferredInstallPrompt(null);
+      setInstallGuideOpen(false);
+      updateStandaloneState();
+    };
+
+    updateStandaloneState();
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateStandaloneState);
+    } else {
+      mediaQuery.addListener(updateStandaloneState);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+
+      if (typeof mediaQuery.removeEventListener === "function") {
+        mediaQuery.removeEventListener("change", updateStandaloneState);
+      } else {
+        mediaQuery.removeListener(updateStandaloneState);
       }
+    };
+  }, []);
+
+  const openInstallEntry = useCallback(async () => {
+    if (deferredInstallPrompt) {
+      const promptEvent = deferredInstallPrompt;
+      setDeferredInstallPrompt(null);
+
+      try {
+        await promptEvent.prompt();
+        await promptEvent.userChoice;
+      } catch {
+        // Ignore prompt failures and let the button disappear until the browser emits again.
+      }
+
+      return;
     }
 
-    if (panelKey) {
-      setActiveDrawer(panelKey);
+    if (isIosDevice) {
+      setInstallGuideOpen(true);
     }
-  }, []);
+  }, [deferredInstallPrompt, isIosDevice]);
 
   useEffect(() => {
     if (!activeDrawer || typeof window === "undefined") {
@@ -220,20 +276,7 @@ export default function App(): JSX.Element {
   }, []);
 
   let drawerContent: React.ReactNode = null;
-  if (activeDrawer === "settings") {
-    drawerContent = (
-      <SettingsDrawerSection
-        key="settings-panel"
-        actions={actions}
-        bestScore={bestScore}
-        boardLabel={boardLabel}
-        difficulty={difficulty}
-        endlessMode={endlessMode}
-        sizeOptions={sizeOptions}
-        state={state}
-      />
-    );
-  } else if (activeDrawer === "challenge") {
+  if (activeDrawer === "challenge") {
     drawerContent = (
       <ChallengeDrawerSection
         key="challenge-panel"
@@ -266,7 +309,7 @@ export default function App(): JSX.Element {
   const actionsForUI = {
     ...actions,
     closeShareModal,
-    requestRestart: () => setConfirmRestartOpen(true),
+    requestRestart: actions.requestRestart,
     shareChallengeLink: openShareModal,
   };
 
@@ -277,22 +320,9 @@ export default function App(): JSX.Element {
         actions={actionsForUI}
         boardLabel={boardLabel}
         difficulty={difficulty}
+        installAction={installAction ? { ...installAction, onClick: openInstallEntry } : null}
         mode={mode}
         onOpenGuide={() => openDrawer("guide")}
-        onOpenMenu={() => openDrawer("settings")}
-        state={state}
-      />
-
-      <MissionControlSection
-        key="mission"
-        feverText={feverText}
-        feverWidth={feverWidth}
-        levelValue={endlessMode ? `第${state.level}段` : `Lv.${state.level}`}
-        missionText={missionText}
-        progressText={`${formatNumber(state.stageScore)} / ${formatNumber(state.targetScore)}`}
-        resourceLabel={resourceLabel}
-        resourceValue={resourceValue}
-        scoreText={formatNumber(state.score)}
         state={state}
       />
 
@@ -300,13 +330,17 @@ export default function App(): JSX.Element {
         key="board"
         actions={actionsForUI}
         boardLabel={boardLabel}
+        boardTimerText={boardTimerText}
         board={renderBoard}
         boardStyle={boardStyle}
         clearingKeys={clearingKeys}
+        clearingOrderMap={clearingOrderMap}
+        currentPathKey={currentPathKey}
         difficulty={difficulty}
-        disabled={disabled}
+        disabled={boardDisabled}
         endlessMode={endlessMode}
         feverActive={feverActive}
+        levelValue={levelValue}
         mode={mode}
         previewKeys={previewKeys}
         previewOrderMap={previewOrderMap}
@@ -314,13 +348,25 @@ export default function App(): JSX.Element {
         state={state}
       />
 
-      <StickyActionBarSection key="actions" actions={actionsForUI} disabled={disabled} onOpenChallenge={() => openDrawer("challenge")} onOpenMenu={() => openDrawer("settings")} />
+      <ChallengeBriefSection
+        key="mission"
+        feverText={feverText}
+        feverWidth={feverWidth}
+        progressText={progressText}
+        state={state}
+      />
+
+      <StickyActionBarSection
+        key="actions"
+        actions={actionsForUI}
+        awaitingStart={state.awaitingStart}
+        disabled={disabled}
+        gameOver={state.isGameOver}
+      />
 
       <BottomDrawerShellSection key="drawer" activePanel={activeDrawer} open={Boolean(activeDrawer)} onClose={closeDrawer} onSelectPanel={openDrawer}>
         {drawerContent}
       </BottomDrawerShellSection>
-
-      <QuickStartOverlaySection key="quickstart" open={quickStartOpen} onDismiss={() => dismissQuickStart()} onOpenGuide={() => dismissQuickStart("guide")} requiredLength={requiredLength} />
 
       <ChallengeShareModal
         key="share-modal"
@@ -335,45 +381,10 @@ export default function App(): JSX.Element {
         }
         onClose={closeShareModal}
         onCopyLink={copyChallengeLinkFromModal}
-        onSystemShare={shareChallengeFromModal}
         shareFeedback={modalShareFeedback}
       />
 
-      <ConfirmRestartModal
-        key="confirm-restart"
-        open={confirmRestartOpen}
-        onCancel={() => setConfirmRestartOpen(false)}
-        onConfirm={() => {
-          setConfirmRestartOpen(false);
-          if (typeof actions.resetGame === "function") {
-            actions.resetGame();
-          }
-        }}
-      />
-
-      <GameOverModal
-        key="gameover"
-        open={Boolean(state.isGameOver)}
-        score={state.score}
-        onRequestRestart={() => {
-          if (typeof actions.closeGameOver === "function") {
-            actions.closeGameOver();
-          }
-          setConfirmRestartOpen(true);
-        }}
-        onShare={() => {
-          if (typeof actions.closeGameOver === "function") {
-            actions.closeGameOver();
-          }
-          openShareModal();
-        }}
-        onClose={() => {
-          if (typeof actions.closeGameOver === "function") {
-            actions.closeGameOver();
-          }
-          openDrawer("settings");
-        }}
-      />
+      <InstallGuideModal open={installGuideOpen} onClose={() => setInstallGuideOpen(false)} />
     </div>
   );
 }

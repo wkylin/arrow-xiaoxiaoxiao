@@ -14,3 +14,13 @@ createRoot(rootElement).render(
     <App />
   </StrictMode>,
 );
+
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    const serviceWorkerUrl = new URL("./sw.js", window.location.href);
+
+    navigator.serviceWorker.register(serviceWorkerUrl).catch((error) => {
+      console.error("PWA service worker registration failed.", error);
+    });
+  });
+}

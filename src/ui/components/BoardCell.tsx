@@ -9,8 +9,10 @@ export interface BoardCellProps {
   previewKeys: Set<string>;
   previewOrder?: number | null;
   previewStartKey?: string | null;
+  currentPathKey?: string | null;
   previewValid?: boolean;
   clearingKeys: Set<string>;
+  clearingOrder?: number | null;
   disabled?: boolean;
   onPreview?: () => void;
   onClick?: () => void;
@@ -23,8 +25,10 @@ export function BoardCell({
   previewKeys,
   previewOrder,
   previewStartKey,
+  currentPathKey,
   previewValid,
   clearingKeys,
+  clearingOrder,
   disabled,
   onPreview,
   onClick,
@@ -39,12 +43,14 @@ export function BoardCell({
   const isPreviewing = previewKeys.has(cellKey);
   const isClearing = clearingKeys.has(cellKey);
   const isStart = previewStartKey === cellKey;
+  const isCurrent = currentPathKey === cellKey;
 
   const ariaLabel = `${rowIndex + 1}行${colIndex + 1}列，${direction.name}${special ? `，特殊格：${special.name}` : ""}`;
 
   return (
     <button
       type="button"
+      style={isClearing && clearingOrder ? { "--clear-delay": `${Math.max(0, clearingOrder - 1) * 140}ms` } as React.CSSProperties : undefined}
       className={cx(
         "cell",
         direction.key,
@@ -52,6 +58,7 @@ export function BoardCell({
         isPreviewing && "preview",
         isPreviewing && !previewValid && "invalid",
         isStart && "start",
+        isCurrent && "current",
         isClearing && "clearing",
       )}
       disabled={disabled}

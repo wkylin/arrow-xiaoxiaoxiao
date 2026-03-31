@@ -18,11 +18,11 @@ export const MIN_VALID_STARTS = 12;
 export const MODES = {
   classic: {
     key: "classic",
-    name: "经典连锁",
-    subtitle: "计时爽刷高分，冲线后自动升关。",
-    desc: "自动追踪箭头成链，冲高分、攒狂热、刷关卡。",
-    tips: "经典模式是计时冲分：达成本关目标会自动升关并补时，长链、闭环和特殊格都会让收益更高。",
-    bonus: "闭环和长链收益最高，达标后会补时。",
+    name: "主线极境",
+    subtitle: "4×4 起步，一路冲向更大的极境。",
+    desc: "从小盘起步，逐级挑战更大的箭阵和更强的最优路线。",
+    tips: "主线极境会从 4×4 开始自动升级。每盘都要自己找起点、顺箭头走到底，命中本盘最优才算真正过关。",
+    bonus: "越往后盘面越大，真正的压力来自找最优路线的稳定性。",
     stageBase: 780,
     stageStep: 520,
   },
@@ -30,8 +30,8 @@ export const MODES = {
     key: "rush",
     name: "爆爽闯关",
     subtitle: "更像爆款的闯关玩法：收集星钻，再冲目标分。",
-    desc: "关卡里既要打够分数，也要收集星钻，步数用光就结束。",
-    tips: "闯关模式里，每次成功消除会消耗 1 步；达到目标分数且收集够星钻才能过关，剩余步数越多评级越高。",
+    desc: "关卡里既要找出最优路径，也要收集星钻，步数用光就结束。",
+    tips: "闯关模式里要在有限步数内反复解题：找到每盘最优路径才会结算，达到目标分数且收集够星钻才能过关。",
     bonus: "收集星钻 + 目标分数双达成才算过关。",
     stageBase: 540,
     stageStep: 430,
@@ -40,11 +40,11 @@ export const MODES = {
   },
   endless: {
     key: "endless",
-    name: "无尽模式",
-    subtitle: "自己选棋盘尺寸，一直刷分不封顶。",
-    desc: "没有倒计时，也没有步数上限，适合练手和挑战大棋盘。",
-    tips: "无尽模式只有里程碑，没有失败条件；打满当前目标分会进入下一段，棋盘尺寸可在 4×4 到 12×12 自由切换。",
-    bonus: "无时间无步数限制，更适合研究长链、闭环和大盘路线。",
+    name: "同盘挑战",
+    subtitle: "锁定同一盘，反复冲击更强解法。",
+    desc: "用挑战码固定盘面，反复挑战同一题的最优路线。",
+    tips: "同盘挑战只有里程碑，找错了会立刻清空本次路线让你重试；适合反复练同一盘，研究更长、更稳的最优解。",
+    bonus: "没有额外资源压力，更适合专注研究路线本身。",
     stageBase: 660,
     stageStep: 360,
   },
@@ -66,6 +66,7 @@ export const DIFFICULTIES = {
     classicTimeReward: 15,
     classicTimeMax: 158,
     classicShuffleCost: 1,
+    boardChallengeTime: 20,
     rushMoveBase: 21,
     rushShuffleCost: 0,
     missionOffset: -1,
@@ -88,6 +89,7 @@ export const DIFFICULTIES = {
     classicTimeReward: 13,
     classicTimeMax: 138,
     classicShuffleCost: 1,
+    boardChallengeTime: 20,
     rushMoveBase: 19,
     rushShuffleCost: 0,
     missionOffset: 0,
@@ -110,6 +112,7 @@ export const DIFFICULTIES = {
     classicTimeReward: CLASSIC_TIME_REWARD,
     classicTimeMax: CLASSIC_TIME_MAX,
     classicShuffleCost: CLASSIC_SHUFFLE_COST,
+    boardChallengeTime: 20,
     rushMoveBase: MODES.rush.moveBase,
     rushShuffleCost: RUSH_MOVE_SHUFFLE_COST,
     missionOffset: 0,
@@ -132,6 +135,7 @@ export const DIFFICULTIES = {
     classicTimeReward: 10,
     classicTimeMax: 104,
     classicShuffleCost: 3,
+    boardChallengeTime: 20,
     rushMoveBase: 14,
     rushShuffleCost: 1,
     missionOffset: 1,
@@ -154,6 +158,7 @@ export const DIFFICULTIES = {
     classicTimeReward: 8,
     classicTimeMax: 92,
     classicShuffleCost: 4,
+    boardChallengeTime: 20,
     rushMoveBase: 12,
     rushShuffleCost: 2,
     missionOffset: 2,
@@ -182,6 +187,10 @@ export function getModeConfig(modeKey) {
 
 export function getDifficultyConfig(difficultyKey) {
   return DIFFICULTIES[difficultyKey] ?? DIFFICULTIES.normal;
+}
+
+export function getBoardChallengeTimeLimit(difficultyKey = "normal") {
+  return getDifficultyConfig(difficultyKey).boardChallengeTime ?? 20;
 }
 export function normalizeSeedCode(seedCode) {
   return String(seedCode ?? "").trim();
@@ -454,6 +463,36 @@ export function getChain(board, startRow, startCol, requiredLength = BASE_MIN_CL
   };
 }
 
+export function getNextPathStep(board, path) {
+  const current = path[path.length - 1];
+  if (!current) {
+    return null;
+  }
+
+  const cell = board[current.row]?.[current.col];
+  if (!cell) {
+    return null;
+  }
+
+  const direction = DIRECTIONS[cell.dir];
+  const nextRow = current.row + direction.deltaRow;
+  const nextCol = current.col + direction.deltaCol;
+
+  if (!inBounds(nextRow, nextCol, board) || !board[nextRow]?.[nextCol]) {
+    return null;
+  }
+
+  const nextKey = keyOf(nextRow, nextCol);
+  if (path.some(({ row, col }) => keyOf(row, col) === nextKey)) {
+    return null;
+  }
+
+  return {
+    row: nextRow,
+    col: nextCol,
+  };
+}
+
 export function countValidStarts(board, requiredLength = BASE_MIN_CLEAR) {
   const boardSize = getBoardSizeFromBoard(board);
   let total = 0;
@@ -469,26 +508,31 @@ export function countValidStarts(board, requiredLength = BASE_MIN_CLEAR) {
   return total;
 }
 
-export function findBestStart(board, requiredLength = BASE_MIN_CLEAR) {
+export function analyzeBoardPaths(board, requiredLength = BASE_MIN_CLEAR) {
   const boardSize = getBoardSizeFromBoard(board);
   let best = null;
+  let bestStartCount = 0;
+  let bestLength = 0;
 
   for (let row = 0; row < boardSize; row += 1) {
     for (let col = 0; col < boardSize; col += 1) {
       const result = getChain(board, row, col, requiredLength);
-      if (!result.valid) {
-        continue;
-      }
-
       const summary = summarizeChain(board, result);
       const score =
-        result.chain.length * 100 +
+        result.chain.length * 1000 +
         (result.loop ? 45 : 0) +
         summary.gem * 30 +
         summary.time * 18 +
         summary.fever * 22;
 
-      if (!best || score > best.score) {
+      if (result.chain.length > bestLength) {
+        bestLength = result.chain.length;
+        bestStartCount = 1;
+      } else if (result.chain.length === bestLength) {
+        bestStartCount += 1;
+      }
+
+      if (!best || result.chain.length > best.result.chain.length || (result.chain.length === best.result.chain.length && score > best.score)) {
         best = {
           row,
           col,
@@ -500,7 +544,15 @@ export function findBestStart(board, requiredLength = BASE_MIN_CLEAR) {
     }
   }
 
-  return best;
+  return {
+    best,
+    bestLength,
+    bestStartCount,
+  };
+}
+
+export function findBestStart(board, requiredLength = BASE_MIN_CLEAR) {
+  return analyzeBoardPaths(board, requiredLength).best;
 }
 
 export function ensurePlayableBoard({

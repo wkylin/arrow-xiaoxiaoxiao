@@ -10,10 +10,9 @@ import {
   getStageTarget,
   normalizeSeedCode,
 } from "../gameCore";
-import { createHintState } from "./hints";
+import { resolveBoardSizeForRun, resolveStageProgressState } from "./challengeProgression";
+import { applyBoardChallengeState, buildBoardReadyStatus } from "./pathChallenge";
 import {
-  ENDLESS_RESET_STATUS,
-  RESET_STATUS,
   ensureBestScoreEntry,
   getActiveBoardSize,
   normalizeSeedMode,
@@ -38,10 +37,16 @@ export function buildRunStateFromConfig({
   soundEnabled,
   makeFreshBoard,
   setRandomSource,
+  awaitingStart = false,
 }) {
   const level = 1;
   const difficulty = getDifficultyConfig(difficultyKey);
-  const activeBoardSize = getActiveBoardSize(modeKey, customBoardSize);
+  const activeBoardSize = resolveBoardSizeForRun({
+    modeKey,
+    level,
+    difficultyKey,
+    customBoardSize: getActiveBoardSize(modeKey, customBoardSize),
+  });
   const nextBestScores = ensureBestScoreEntry(bestScores, modeKey, difficultyKey, customBoardSize);
   const {
     seedMode: nextSeedMode,
@@ -53,24 +58,38 @@ export function buildRunStateFromConfig({
   setRandomSource(createSeededRandom(activeSeedCode));
 
   const targetScore = getStageTarget(modeKey, level, difficultyKey, activeBoardSize);
+  const stageProgressState = resolveStageProgressState({
+    modeKey,
+    level,
+    difficultyKey,
+    customBoardSize: activeBoardSize,
+    fallbackStageScore: 0,
+    fallbackTargetScore: targetScore,
+  });
   const missionGoal = getMissionGoal(modeKey, level, difficultyKey);
   const board = makeFreshBoard(modeKey, level, missionGoal, 0, difficultyKey, activeBoardSize);
 
-  return createHintState({
+  const nextState = applyBoardChallengeState({
     board,
+    awaitingStart,
     previewChain: [],
     previewStartKey: null,
-    previewValid: false,
+    previewValid: true,
     clearingKeys: [],
+    pathInProgress: false,
+    currentPathKey: null,
+    expectedNextKey: null,
+    pathTargetLength: 0,
+    pathTargetStarts: 0,
     score: 0,
-    stageScore: 0,
+    stageScore: stageProgressState.stageScore,
     level,
-    targetScore,
+    targetScore: stageProgressState.targetScore,
     missionGoal,
     missionCollected: 0,
     combo: 1,
     bestScores: nextBestScores,
-    timeLeft: modeKey === "classic" ? difficulty.classicTimeLimit : 0,
+    timeLeft: 0,
     movesLeft: modeKey === "rush" ? getMoveLimit(level, difficultyKey) : 0,
     lastClearAt: 0,
     feverCharge: 0,
@@ -87,8 +106,21 @@ export function buildRunStateFromConfig({
     isLocked: false,
     isGameOver: false,
     suppressGameOverUntilReset: false,
-    statusText: modeKey === "endless" ? ENDLESS_RESET_STATUS : RESET_STATUS,
+    gameOverTitle: null,
   });
+
+  if (!awaitingStart) {
+    return nextState;
+  }
+
+  return {
+    ...nextState,
+    statusText: buildBoardReadyStatus({
+      modeKey: nextState.modeKey,
+      pathTargetLength: nextState.pathTargetLength,
+      pathTargetStarts: nextState.pathTargetStarts,
+    }),
+  };
 }
 
 export function buildResetOptions({

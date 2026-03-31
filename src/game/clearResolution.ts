@@ -14,10 +14,13 @@ import {
   keyOf,
   summarizeChain,
 } from "../gameCore";
-import { createHintState, sleep } from "./hints";
+import { getClassicChallengeLevelMeta, resolveBoardSizeForRun, resolveStageProgressState } from "./challengeProgression";
+import { sleep } from "./hints";
+import { applyBoardChallengeState, buildBoardIntroStatus } from "./pathChallenge";
 import { getActiveBoardSize } from "./session";
 
-const CLEAR_SETTLE_DELAY = 160;
+const CLEAR_SETTLE_BASE_DELAY = 900;
+const CLEAR_SETTLE_STEP_DELAY = 160;
 
 export function describeSummary(summary) {
   const parts = [];
@@ -47,9 +50,7 @@ export function getSummaryRewardText(modeKey, summary) {
   }
 
   if (summary.time) {
-    if (modeKey === "classic") {
-      rewards.push(`补时 +${(summary.time * 2.2).toFixed(1)}s`);
-    } else if (modeKey === "rush") {
+    if (modeKey === "rush") {
       rewards.push(`步数 +${summary.time}`);
     } else {
       rewards.push(`续航加分 +${summary.time * 55}`);
@@ -63,7 +64,7 @@ export function getSummaryRewardText(modeKey, summary) {
   return rewards.length ? ` ${rewards.join(" · ")}` : "";
 }
 
-export function buildGameOverStateForReason({ currentState, reason, persistBestScores }) {
+export function buildGameOverStateForReason({ currentState, reason, persistBestScores, title = null, statusText = null }) {
   const bestScores = persistBestScores(
     currentState.modeKey,
     currentState.difficultyKey,
@@ -78,13 +79,28 @@ export function buildGameOverStateForReason({ currentState, reason, persistBestS
     isLocked: false,
     previewChain: [],
     previewStartKey: null,
-    previewValid: false,
+    previewValid: true,
     clearingKeys: [],
+    pathInProgress: false,
+    currentPathKey: null,
+    expectedNextKey: null,
     bestScores,
+    gameOverTitle:
+      title
+      ?? (reason === "timeout"
+        ? "时间到了"
+        : reason === "moves"
+          ? "步数耗尽"
+          : "继续努力"),
     statusText:
-      reason === "timeout"
-        ? `时间到！最终得分 ${currentState.score.toLocaleString("zh-CN")}，最高分已自动记录。`
-        : `步数用完！总分 ${currentState.score.toLocaleString("zh-CN")}，点击“重新开局”再冲一把。`,
+      statusText
+      ?? (reason === "timeout"
+        ? (currentState.modeKey === "classic"
+          ? "这次时间到了。准备好就点“重新开局”，再把这盘拿下。"
+          : `时间到！最终得分 ${currentState.score.toLocaleString("zh-CN")}，最高分已自动记录。`)
+        : reason === "moves"
+          ? `步数用完！总分 ${currentState.score.toLocaleString("zh-CN")}，点击“重新开局”再冲一把。`
+          : `这次没命中本盘最优路径，最终得分 ${currentState.score.toLocaleString("zh-CN")}。继续努力，再来一局。`),
   };
 }
 
@@ -97,50 +113,72 @@ export function getPreviewDescription({ board, result }) {
   const extras = describeSummary(summary);
   const loopText = result.loop ? `，其中 ${result.loopLength} 格形成闭环` : "";
   if (result.valid) {
-    return `预览：共 ${result.chain.length} 格${loopText}${extras}，点击即可消除。`;
+    return `这条路线共 ${result.chain.length} 格${loopText}${extras}。你需要自己一格一格点到尽头。`;
   }
 
-  return `预览：只有 ${result.chain.length} 格，至少需要 ${result.requiredLength} 格才能消除${extras}。`;
+  return `这条路线只有 ${result.chain.length} 格，达不到当前门槛 ${result.requiredLength} 格${extras}。`;
 }
 
 export function buildLevelUpStateFromState({ currentState, makeFreshBoard }) {
-  const difficulty = getDifficultyConfig(currentState.difficultyKey);
-  const activeBoardSize = getActiveBoardSize(currentState.modeKey, currentState.customBoardSize);
   const nextLevel = currentState.level + 1;
+  const activeBoardSize = resolveBoardSizeForRun({
+    modeKey: currentState.modeKey,
+    level: nextLevel,
+    difficultyKey: currentState.difficultyKey,
+    customBoardSize: getActiveBoardSize(currentState.modeKey, currentState.customBoardSize),
+  });
   const nextTargetScore = getStageTarget(currentState.modeKey, nextLevel, currentState.difficultyKey, activeBoardSize);
+  const nextStageProgress = resolveStageProgressState({
+    modeKey: currentState.modeKey,
+    level: nextLevel,
+    difficultyKey: currentState.difficultyKey,
+    customBoardSize: activeBoardSize,
+    fallbackStageScore: 0,
+    fallbackTargetScore: nextTargetScore,
+  });
   const nextMissionGoal = getMissionGoal(currentState.modeKey, nextLevel, currentState.difficultyKey);
   const nextBoard = makeFreshBoard(currentState.modeKey, nextLevel, nextMissionGoal, 0, currentState.difficultyKey, activeBoardSize);
+  const classicMeta = currentState.modeKey === "classic" ? getClassicChallengeLevelMeta(nextLevel) : null;
   const successText =
     currentState.modeKey === "endless"
       ? `里程碑达成！进入第 ${nextLevel} 段，继续无尽刷分。`
-      : `过关成功！${currentState.modeKey === "rush" ? "★".repeat(getRushStars(currentState.movesLeft)) : "★★★"} 评级已到手，进入第 ${nextLevel} 关。`;
+      : currentState.modeKey === "classic"
+        ? `你好棒！进入 Lv.${nextLevel}，${classicMeta?.boardSize}×${classicMeta?.boardSize} 新盘已上桌。`
+        : `过关成功！${"★".repeat(getRushStars(currentState.movesLeft))} 评级已到手，进入第 ${nextLevel} 关。`;
 
-  const hintedState = createHintState({
+  const nextState = applyBoardChallengeState({
     ...currentState,
     board: nextBoard,
     previewChain: [],
     previewStartKey: null,
-    previewValid: false,
+    previewValid: true,
     clearingKeys: [],
-    stageScore: 0,
+    pathInProgress: false,
+    currentPathKey: null,
+    expectedNextKey: null,
+    pathTargetLength: 0,
+    pathTargetStarts: 0,
+    stageScore: nextStageProgress.stageScore,
     level: nextLevel,
-    targetScore: nextTargetScore,
+    targetScore: nextStageProgress.targetScore,
     missionGoal: nextMissionGoal,
     missionCollected: 0,
     combo: 1,
     feverCharge: Math.max(18, Math.min(40, currentState.feverCharge)),
     feverActiveUntil: 0,
-    timeLeft:
-      currentState.modeKey === "classic"
-        ? Math.min(difficulty.classicTimeMax, currentState.timeLeft + difficulty.classicTimeReward)
-        : 0,
+    timeLeft: 0,
     movesLeft: currentState.modeKey === "rush" ? getMoveLimit(nextLevel, currentState.difficultyKey) : 0,
+    gameOverTitle: null,
     statusText: successText,
   });
 
   return {
-    ...hintedState,
-    statusText: `${successText} 先看发光起点和数字顺序。`,
+    ...nextState,
+    statusText: `${successText} ${buildBoardIntroStatus({
+      modeKey: nextState.modeKey,
+      pathTargetLength: nextState.pathTargetLength,
+      pathTargetStarts: nextState.pathTargetStarts,
+    })}`,
   };
 }
 
@@ -182,11 +220,17 @@ export async function resolveSuccessfulClear({
 
   applyState({
     ...currentState,
+    previewChain: result.chain,
+    previewStartKey: keyOf(result.chain[0].row, result.chain[0].col),
+    previewValid: true,
     combo,
     lastClearAt: now,
     feverCharge: feverState.feverCharge,
     feverActiveUntil: feverState.feverActiveUntil,
     isLocked: true,
+    pathInProgress: true,
+    currentPathKey: keyOf(result.chain[result.chain.length - 1].row, result.chain[result.chain.length - 1].col),
+    expectedNextKey: null,
     clearingKeys,
   });
 
@@ -196,23 +240,25 @@ export async function resolveSuccessfulClear({
     playSound("fever");
   }
 
-  await sleep(CLEAR_SETTLE_DELAY);
+  await sleep(CLEAR_SETTLE_BASE_DELAY + Math.max(0, result.chain.length - 1) * CLEAR_SETTLE_STEP_DELAY);
 
   if (actionVersionRef.current !== actionVersion) {
     return;
   }
 
   const liveState = gameRef.current;
-  const activeBoardSize = getActiveBoardSize(liveState.modeKey, liveState.customBoardSize);
+  const activeBoardSize = resolveBoardSizeForRun({
+    modeKey: liveState.modeKey,
+    level: liveState.level,
+    difficultyKey: liveState.difficultyKey,
+    customBoardSize: getActiveBoardSize(liveState.modeKey, liveState.customBoardSize),
+  });
   let nextMissionCollected = liveState.missionCollected;
   let nextMovesLeft = liveState.movesLeft;
-  let nextTimeLeft = liveState.timeLeft;
 
   if (liveState.modeKey === "rush") {
     nextMissionCollected += summary.gem;
     nextMovesLeft = Math.max(0, liveState.movesLeft - 1 + summary.time);
-  } else if (liveState.modeKey === "classic") {
-    nextTimeLeft = Math.min(getDifficultyConfig(liveState.difficultyKey).classicTimeMax, liveState.timeLeft + summary.time * 2.2);
   }
 
   const boardAfterClear = cloneBoard(liveState.board);
@@ -252,24 +298,28 @@ export async function resolveSuccessfulClear({
     ? ` 狂热启动，${getDifficultyConfig(liveState.difficultyKey).feverClearLength} 格也能消除！`
     : "";
 
-  let nextState = {
+  let nextState = applyBoardChallengeState({
     ...liveState,
     board: repairedBoard.board,
-    previewChain: [],
-    previewStartKey: null,
-    previewValid: false,
-    clearingKeys: [],
-    isLocked: false,
     score: nextScore,
     stageScore: nextStageScore,
     missionCollected: nextMissionCollected,
     movesLeft: nextMovesLeft,
-    timeLeft: nextTimeLeft,
+    timeLeft: 0,
     bestScores: nextBestScores,
-    statusText: `命中 ${result.chain.length} 连锁，${loopText}获得 ${gain} 分。${getSummaryRewardText(liveState.modeKey, summary)}${feverText}`.trim(),
+    isLocked: false,
+    statusText: "",
+  });
+
+  nextState = {
+    ...nextState,
+    statusText: `你好棒！命中本盘最优 ${result.chain.length} 格，${loopText}获得 ${gain} 分。${getSummaryRewardText(liveState.modeKey, summary)}${feverText} 下一盘最优 ${nextState.pathTargetLength} 格。`.trim(),
   };
 
-  if (hasMetStageGoal(nextState)) {
+  if (nextState.modeKey === "classic") {
+    nextState = buildLevelUpState(nextState);
+    playSound("level");
+  } else if (hasMetStageGoal(nextState)) {
     nextState = buildLevelUpState(nextState);
     playSound("level");
   } else if (nextState.modeKey === "rush" && nextState.movesLeft <= 0) {

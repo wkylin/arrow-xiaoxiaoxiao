@@ -9,11 +9,10 @@ export interface ChallengeShareModalProps {
   subtitle?: React.ReactNode;
   onClose?: () => void;
   onCopyLink?: () => void;
-  onSystemShare?: () => void;
   shareFeedback?: ShareActionResult | null;
 }
 
-export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle, onClose, onCopyLink, onSystemShare, shareFeedback }: ChallengeShareModalProps) {
+export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle, onClose, onCopyLink, shareFeedback }: ChallengeShareModalProps) {
   if (!open) return null;
 
   const linkCopied = shareFeedback?.action === "challengeLink" && shareFeedback?.tone === "success";
@@ -28,7 +27,7 @@ export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle
             <h3>{title}</h3>
             <p className="share-modal-desc">{subtitle}</p>
           </div>
-          <button className="icon-btn share-close-btn" type="button" onClick={onClose}>关闭</button>
+          <button className="icon-btn share-close-btn" type="button" onClick={onClose} aria-label="关闭分享弹层">X</button>
         </div>
 
         <div className="share-qr-card">
@@ -40,16 +39,18 @@ export function ChallengeShareModal({ open, qrDataUrl, shareUrl, title, subtitle
         </div>
 
         <div className="share-link-block">
-          <span className="share-link-label">分享链接</span>
+          <div className="share-link-head">
+            <span className="share-link-label">分享链接</span>
+            <button
+              className={`icon-btn share-copy-icon${linkCopied ? " is-copied" : ""}`}
+              type="button"
+              onClick={onCopyLink}
+              aria-label={linkCopied ? "链接已复制" : "复制分享链接"}
+            >
+              {linkCopied ? "✓" : "⧉"}
+            </button>
+          </div>
           <p className="share-link-value">{shareUrl}</p>
-        </div>
-
-        <div className="share-modal-actions">
-          <button className={`secondary-btn share-modal-btn${linkCopied ? " is-copied" : ""}`} type="button" onClick={onCopyLink}>
-            {linkCopied ? "已复制 ✓" : "复制链接"}
-          </button>
-          <button className="secondary-btn share-modal-btn" type="button" onClick={onSystemShare}>系统分享</button>
-          <button className="primary-btn share-modal-btn" type="button" onClick={onClose}>我知道了</button>
         </div>
 
         <p className={feedbackClass} role="status" aria-live="polite">{feedbackText}</p>
